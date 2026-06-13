@@ -1,0 +1,23 @@
+# Xcode / xcodegen
+*.xcodeproj
+*.xcworkspace
+!default.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+*.xcresult
+Payload/
+*.ipa
+
+# Swift Package Manager
+.build/
+.swiftpm/
+SourcePackages/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Misc
+*.log
+TestResults.xcresult

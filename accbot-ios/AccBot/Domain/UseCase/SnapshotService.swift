@@ -35,10 +35,26 @@ final class SnapshotService {
             baseChunkCzk: plan.map { "\($0.amount)" } ?? "0", baseChunkMultiplier: "1.0",
             lastProcessedDate: plan?.lastExecutedAt.map { dayFmt.string(from: $0) } ?? "",
             availableCashCzk: "0") // cash je živá z burzy, neukládáme
+        let firefishLoans = try db.firefishLoanDao.getAll().map { l in
+            AppSnapshot.FirefishLoanSnap(
+                externalLoanId: l.externalLoanId,
+                loanDate: dayFmt.string(from: Date(timeIntervalSince1970: l.loanDate)),
+                maturityDate: dayFmt.string(from: Date(timeIntervalSince1970: l.maturityDate)),
+                loanAmountCzk: l.loanAmountCzk, interestRate: l.interestRate,
+                btcFeeRate: l.btcFeeRate, btcPriceAtLoan: l.btcPriceAtLoan,
+                collateralBtcAmount: l.collateralBtcAmount, isRepaid: l.isRepaid)
+        }
+        let bankLoans = try db.bankLoanDao.getAll().map { l in
+            AppSnapshot.BankLoanSnap(
+                principalCzk: l.principalCzk, annualInterestRate: l.annualInterestRate,
+                durationMonths: l.durationMonths, remainingPrincipalCzk: l.remainingPrincipalCzk,
+                nextPaymentDate: dayFmt.string(from: Date(timeIntervalSince1970: l.nextPaymentDate)),
+                isFullyPaid: l.isFullyPaid)
+        }
         return AppSnapshot(
             version: 1, exportedAt: isoFmt.string(from: Date()), fiat: fiat,
             strategy: strategy, holdings: holdings, transactions: txs,
-            firefishLoans: [], bankLoans: [])
+            firefishLoans: firefishLoans, bankLoans: bankLoans)
     }
 
     func load(_ snap: AppSnapshot, into db: DcaDatabase) throws {
@@ -51,6 +67,28 @@ final class SnapshotService {
                 purchasePriceCzk: h.purchasePriceCzk, isCollateralized: h.isCollateralized,
                 loanId: h.loanId, isAvailableForDca: true, source: h.source, notes: h.notes, createdAt: now)
         })
-        // Pozn.: transakce/plán/loany load doplní Plán 3 (holdingy = nenahraditelné jádro pro daně).
+        try db.firefishLoanDao.deleteAll()
+        try db.firefishLoanDao.upsertBatch(snap.firefishLoans.map { l in
+            let loanD = dayFmt.date(from: l.loanDate) ?? Date()
+            let matD = dayFmt.date(from: l.maturityDate) ?? Date()
+            let days = Calendar(identifier: .gregorian).dateComponents([.day], from: loanD, to: matD).day ?? 0
+            return FirefishLoanRecord(
+                externalLoanId: l.externalLoanId,
+                loanDate: loanD.timeIntervalSince1970, maturityDate: matD.timeIntervalSince1970,
+                durationDays: max(0, days),
+                loanAmountCzk: l.loanAmountCzk, interestRate: l.interestRate,
+                btcFeeRate: l.btcFeeRate, btcPriceAtLoan: l.btcPriceAtLoan,
+                collateralBtcAmount: l.collateralBtcAmount, isRepaid: l.isRepaid)
+        })
+        try db.bankLoanDao.deleteAll()
+        try db.bankLoanDao.upsertBatch(snap.bankLoans.enumerated().map { idx, l in
+            BankLoanRecord(
+                id: "bank-\(idx)",
+                principalCzk: l.principalCzk, annualInterestRate: l.annualInterestRate,
+                durationMonths: l.durationMonths, remainingPrincipalCzk: l.remainingPrincipalCzk,
+                nextPaymentDate: (dayFmt.date(from: l.nextPaymentDate) ?? Date()).timeIntervalSince1970,
+                isFullyPaid: l.isFullyPaid)
+        })
+        // Pozn.: transakce/plán load (re-importovatelné z CoinMate) lze doplnit dle potřeby.
     }
 }

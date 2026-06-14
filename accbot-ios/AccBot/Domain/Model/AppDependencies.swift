@@ -20,6 +20,7 @@ final class AppDependencies: ObservableObject {
     let marketDataService: MarketDataService
     let notificationService: NotificationService
     let dcaExecutionEngine: DcaExecutionEngine
+    let syncNuplUseCase: SyncNuplUseCase
     private var cancellables = Set<AnyCancellable>()
 
     /// Get the active database based on sandbox mode
@@ -60,6 +61,11 @@ final class AppDependencies: ObservableObject {
             notificationService: notificationService,
             marketDataService: marketDataService
         )
+        let syncNuplUseCase = SyncNuplUseCase(
+            nuplDao: database.nuplDao,
+            marketDataService: marketDataService,
+            userPreferences: userPreferences
+        )
 
         // Assign properties
         self.database = database
@@ -72,11 +78,15 @@ final class AppDependencies: ObservableObject {
         self.marketDataService = marketDataService
         self.notificationService = notificationService
         self.dcaExecutionEngine = dcaExecutionEngine
+        self.syncNuplUseCase = syncNuplUseCase
 
         // Forward onboardingPreferences changes so RootView re-renders
         // when onboarding completes (rare event, no perf concern).
         onboardingPreferences.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+
+        // NUPL sync při startu (1×/den guard uvnitř) — data pro NUPL strategii + catch-up
+        Task { await syncNuplUseCase.sync() }
     }
 }

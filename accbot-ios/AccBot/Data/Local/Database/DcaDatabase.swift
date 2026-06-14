@@ -25,7 +25,10 @@ final class DcaDatabase {
         if let path = path {
             dbPool = try DatabasePool(path: path)
         } else {
-            dbPool = try DatabasePool(path: ":memory:")
+            // DatabasePool nepodporuje :memory: (WAL potřebuje soubor) →
+            // unikátní throwaway temp soubor pro testy.
+            let tmp = NSTemporaryDirectory() + "accbot-test-\(UUID().uuidString).sqlite"
+            dbPool = try DatabasePool(path: tmp)
         }
         try Self.runMigrations(on: dbPool)
         planDao = DcaPlanDao(dbPool: dbPool)

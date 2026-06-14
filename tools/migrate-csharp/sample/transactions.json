@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "transactions": [
+    {
+      "id": "t1",
+      "date": "2026-06-05T00:00:00",
+      "type": "DcaPurchase",
+      "amountBtc": 0.0123,
+      "amountCzk": -16100.0,
+      "btcPriceCzk": 1310069.0
+    }
+  ]
+}

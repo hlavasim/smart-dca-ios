@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "fiat": "CZK",
+  "strategy": {
+    "type": "NUPL",
+    "nuplBottomValue": 0.0, "nuplCenterValue": 0.5,
+    "nuplMinMultiplier": 0.5, "nuplMaxMultiplier": 3.0,
+    "baseChunkCzk": "2308.36",
+    "baseChunkMultiplier": "0.8",
+    "lastProcessedDate": "2026-06-09",
+    "availableCashCzk": "3984.23"
+  },
+  "holdings": [
+    {
+      "id": "h1", "amount": "0.5",
+      "acquisitionDate": "2021-04-21",
+      "purchasePriceCzk": "0.0",
+      "isCollateralized": false,
+      "loanId": null,
+      "source": "Initial", "notes": ""
+    }
+  ],
+  "transactions": [
+    {
+      "date": "2026-06-05", "type": "DcaPurchase",
+      "amountBtc": "0.0123", "amountCzk": "-16100.0",
+      "btcPriceCzk": "1310069.0", "exchangeOrderId": null
+    }
+  ],
+  "firefishLoans": [
+    {
+      "externalLoanId": "FF1",
+      "loanDate": "2026-01-10", "maturityDate": "2027-01-10",
+      "loanAmountCzk": "50000.0", "interestRate": "0.1",
+      "btcFeeRate": "0.015", "btcPriceAtLoan": "1200000.0",
+      "collateralBtcAmount": "0.08", "isRepaid": false
+    }
+  ],
+  "bankLoans": [
+    {
+      "principalCzk": "763300.0", "annualInterestRate": "0.07",
+      "durationMonths": 120, "remainingPrincipalCzk": "750000.0",
+      "nextPaymentDate": "2026-07-01", "isFullyPaid": false
+    }
+  ]
+}

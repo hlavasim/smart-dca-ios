@@ -1,0 +1,12 @@
+{
+  "loans": [
+    {
+      "principalCzk": 763300.0,
+      "annualInterestRate": 0.07,
+      "durationMonths": 120,
+      "remainingPrincipalCzk": 750000.0,
+      "nextPaymentDate": "2026-07-01T00:00:00",
+      "isFullyPaid": false
+    }
+  ]
+}

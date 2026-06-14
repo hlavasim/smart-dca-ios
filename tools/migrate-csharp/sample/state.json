@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "strategy": {
+    "strategyName": "SmartDcaNUPL",
+    "lastProcessedDate": "2026-06-09T00:00:00",
+    "baseChunkCzk": 2308.36,
+    "availableCashCzk": 3984.23
+  }
+}

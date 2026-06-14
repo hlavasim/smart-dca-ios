@@ -357,7 +357,8 @@ final class DcaExecutionEngine {
 
     /// Dokoupí zmeškané dny pro NUPL plán. Každý den: idempotency zámek PŘED nákupem,
     /// multiplikátor z historického NUPL daného dne, timeout = rekonciliace (ne re-buy).
-    private func runNuplCatchup(plan: DcaPlan, config: NuplConfig, api: ExchangeApi, now: Date) async {
+    /// internal (ne private) kvůli testovatelnosti (@testable). Volá se z executePlan.
+    func runNuplCatchup(plan: DcaPlan, config: NuplConfig, api: ExchangeApi, now: Date) async {
         let todayEpoch = NuplDao.epochDay(now)
         let lastEpoch = plan.lastExecutedAt.map { NuplDao.epochDay($0) } ?? (todayEpoch - 1)
         let firstDay = max(lastEpoch + 1, todayEpoch - Int64(maxCatchupDays) + 1)

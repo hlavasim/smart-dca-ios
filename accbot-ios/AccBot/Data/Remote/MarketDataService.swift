@@ -135,4 +135,37 @@ actor MarketDataService {
             return nil
         }
     }
+
+    // MARK: - NUPL (bitcoin-data.com)
+
+    private let bitcoinDataNuplUrl = "https://bitcoin-data.com/v1/nupl"
+
+    /// Stáhne celou NUPL historii z bitcoin-data.com.
+    /// Formát: [{ "d": "yyyy-MM-dd", "unixTs": <int>, "nupl": <number|string> }]
+    func getNuplHistory() async -> [(day: Int64, nupl: Double)]? {
+        do {
+            let (data, _) = try await client.get(url: bitcoinDataNuplUrl)
+            guard let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            fmt.timeZone = TimeZone(identifier: "UTC")
+            return arr.compactMap { row -> (day: Int64, nupl: Double)? in
+                guard let dStr = row["d"] as? String, let date = fmt.date(from: dStr) else { return nil }
+                let nupl: Double?
+                if let n = row["nupl"] as? NSNumber { nupl = n.doubleValue }
+                else if let s = row["nupl"] as? String { nupl = Double(s) }
+                else { nupl = nil }
+                guard let nuplVal = nupl else { return nil }
+                return (day: Int64((date.timeIntervalSince1970 / 86_400).rounded(.down)), nupl: nuplVal)
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    /// NUPL pro dnešní (nebo nejbližší dostupný) den — live cesta strategie.
+    func getNuplToday() async -> Double? {
+        guard let history = await getNuplHistory(), !history.isEmpty else { return nil }
+        return history.max(by: { $0.day < $1.day })?.nupl
+    }
 }

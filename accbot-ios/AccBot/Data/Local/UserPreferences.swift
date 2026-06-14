@@ -86,6 +86,18 @@ final class UserPreferences: ObservableObject {
         }
     }
 
+    // MARK: - NUPL sync (rate-limit guard)
+
+    @Published var lastNuplSyncDay: Int64? {
+        didSet {
+            if let day = lastNuplSyncDay {
+                defaults.set(Int(day), forKey: Keys.lastNuplSyncDay)
+            } else {
+                defaults.removeObject(forKey: Keys.lastNuplSyncDay)
+            }
+        }
+    }
+
     // MARK: - Initialization
 
     init(defaults: UserDefaults) {
@@ -104,6 +116,8 @@ final class UserPreferences: ObservableObject {
         self.lastSeenBuildNumber = defaults.integer(forKey: Keys.lastSeenBuildNumber)
         let bgTimestamp = defaults.double(forKey: Keys.lastBackgroundRun)
         self.lastBackgroundRun = bgTimestamp > 0 ? Date(timeIntervalSince1970: bgTimestamp) : nil
+        let nuplDayValue = defaults.object(forKey: Keys.lastNuplSyncDay) as? Int
+        self.lastNuplSyncDay = nuplDayValue.map(Int64.init)
     }
 
     func isSandboxMode() -> Bool { sandboxMode }
@@ -124,5 +138,6 @@ final class UserPreferences: ObservableObject {
         static let lowBalanceThresholdDays = "lowBalanceThresholdDays"
         static let lastSeenBuildNumber = "lastSeenBuildNumber"
         static let lastBackgroundRun = "lastBackgroundRun"
+        static let lastNuplSyncDay = "lastNuplSyncDay"
     }
 }

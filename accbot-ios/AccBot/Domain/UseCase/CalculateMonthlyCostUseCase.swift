@@ -82,6 +82,18 @@ final class CalculateMonthlyCostUseCase {
                 }
                 return (mult, "Fear & Greed: \(index) (\(classification))")
             }
+
+        case .nupl(let config):
+            return await computeStrategyEstimate(
+                amount: amount,
+                runsPerMonth: runsPerMonth,
+                minMult: config.minMultiplier,
+                maxMult: config.maxMultiplier
+            ) {
+                guard let nupl = await self.marketDataService.getNuplToday() else { return nil }
+                let mult = NuplConfig.multiplier(nupl: nupl, config: config)
+                return (mult, "NUPL \(String(format: "%.3f", nupl))")
+            }
         }
     }
 

@@ -384,6 +384,7 @@ struct AddPlanView: View {
         case .classic: return "arrow.right"
         case .athBased: return "chart.line.uptrend.xyaxis"
         case .fearAndGreed: return "face.dashed"
+        case .nupl: return "chart.xyaxis.line"
         }
     }
 

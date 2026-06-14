@@ -16,6 +16,7 @@ final class DcaExecutionEngine {
 
     private let maxAttempts = 3
     private let retryDelayNs: UInt64 = 2_000_000_000 // 2s
+    private let maxCatchupDays = 30 // strop zmeškaných dnů na jeden běh (bezpečnost)
 
     init(
         database: DcaDatabase,
@@ -99,6 +100,14 @@ final class DcaExecutionEngine {
         let isSandbox = userPreferences.isSandboxMode()
         guard let credentials = credentialsStore.get(for: plan.exchange, isSandbox: isSandbox) else {
             logger.error("No credentials for \(plan.exchange.displayName) (sandbox=\(isSandbox))")
+            return
+        }
+
+        // NUPL strategie → idempotentní catch-up (per-day historický NUPL, timeout-safe).
+        // Pro force i non-force; idempotence zabrání dvojímu nákupu.
+        if case .nupl(let config) = plan.strategy {
+            let api = exchangeApiFactory.create(credentials: credentials)
+            await runNuplCatchup(plan: plan, config: config, api: api, now: now)
             return
         }
 
@@ -342,6 +351,96 @@ final class DcaExecutionEngine {
             exchange: plan.exchange
         )
         try? activeDb.notificationDao.insert(notification)
+    }
+
+    // MARK: - NUPL Catch-up (idempotentní, timeout-safe)
+
+    /// Dokoupí zmeškané dny pro NUPL plán. Každý den: idempotency zámek PŘED nákupem,
+    /// multiplikátor z historického NUPL daného dne, timeout = rekonciliace (ne re-buy).
+    /// internal (ne private) kvůli testovatelnosti (@testable). Volá se z executePlan.
+    func runNuplCatchup(plan: DcaPlan, config: NuplConfig, api: ExchangeApi, now: Date) async {
+        let todayEpoch = NuplDao.epochDay(now)
+        let lastEpoch = plan.lastExecutedAt.map { NuplDao.epochDay($0) } ?? (todayEpoch - 1)
+        let firstDay = max(lastEpoch + 1, todayEpoch - Int64(maxCatchupDays) + 1)
+        guard firstDay <= todayEpoch else { return }
+
+        let execDao = activeDb.dcaExecutionDao
+        let nuplValues = activeDb.nuplDao
+
+        for day in firstDay...todayEpoch {
+            // 1) Už completed → přeskoč.
+            if let rec = try? execDao.get(planId: plan.id, dayEpoch: day), rec.status == "completed" {
+                continue
+            }
+            // 2) Pending z minula → rekonciliace (s orderId), jinak bezpečně zastav.
+            if let rec = try? execDao.get(planId: plan.id, dayEpoch: day), rec.status == "pending" {
+                if let orderId = rec.exchangeOrderId {
+                    if await reconcile(orderId: orderId, plan: plan, api: api, day: day) { continue }
+                    else { return } // neznámý výsledek → zkus příště
+                } else {
+                    // pending bez orderId (timeout před získáním orderId) → neblokuj dvojím nákupem,
+                    // zastav catch-up dokud uživatel ručně neověří (už byl upozorněn při timeoutu).
+                    return
+                }
+            }
+            // 3) Claim zámku PŘED nákupem (idempotence).
+            guard (try? execDao.tryClaim(planId: plan.id, dayEpoch: day)) == true else { continue }
+
+            // 4) Multiplikátor z historického NUPL daného dne (nil → 1.0 fallback).
+            let nupl = (try? nuplValues.get(dateEpochDay: day)) ?? nil
+            let multiplier = NuplConfig.multiplier(nupl: nupl, config: config)
+            let amount = roundDecimal(plan.amount * Decimal(Double(multiplier)), scale: 2)
+
+            let minOrderSize = MinOrderSizeRepository.getMinOrderSize(exchange: plan.exchange, fiat: plan.fiat)
+            if amount < minOrderSize {
+                try? execDao.mark(planId: plan.id, dayEpoch: day, status: .failed, orderId: nil)
+                continue
+            }
+
+            // 5) Nákup s timeoutem.
+            let result = await withTimeout(seconds: 30) {
+                await api.marketBuy(crypto: plan.crypto, fiat: plan.fiat, fiatAmount: amount)
+            }
+
+            switch result {
+            case .some(.success(let tx)):
+                let saved = Transaction(
+                    planId: plan.id, exchange: plan.exchange, crypto: plan.crypto, fiat: plan.fiat,
+                    fiatAmount: tx.fiatAmount, cryptoAmount: tx.cryptoAmount, price: tx.price,
+                    fee: tx.fee, feeAsset: tx.feeAsset, status: tx.status, exchangeOrderId: tx.exchangeOrderId
+                )
+                try? activeDb.transactionDao.insert(saved)
+                try? execDao.mark(planId: plan.id, dayEpoch: day,
+                    status: tx.status == .pending ? .pending : .completed, orderId: tx.exchangeOrderId)
+                // Postup lastExecutedAt jen po potvrzeném dni (poledne daného dne).
+                try? activeDb.planDao.updateExecution(id: plan.id,
+                    lastExecutedAt: Date(timeIntervalSince1970: Double(day) * 86_400 + 43_200),
+                    nextExecutionAt: calculateNextExecution(plan: plan, from: now))
+                if tx.status == .pending { return } // neznámé → nepokračuj dál
+            case .some(.error):
+                // Známá chyba (order neproběhl) → mark failed, pokračuj dalším dnem.
+                try? execDao.mark(planId: plan.id, dayEpoch: day, status: .failed, orderId: nil)
+            case .none:
+                // Timeout = NEZNÁMÝ výsledek → ponech pending (bez orderId), upozorni a NEPOKRAČUJ
+                // (žádný re-buy naslepo; transakce se případně dohledá z CoinMate).
+                saveInAppNotification(type: .error, title: "DCA výsledek nejistý",
+                    message: "Nákup \(plan.crypto) (den \(day)) timeoutoval — ověř ručně na burze.", plan: plan)
+                return
+            }
+        }
+    }
+
+    /// Rekonciliace: ověř přes order status, jestli order proběhl. true = vyřešeno, false = neznámé.
+    private func reconcile(orderId: String, plan: DcaPlan, api: ExchangeApi, day: Int64) async -> Bool {
+        guard let resolved = await api.getOrderStatus(orderId: orderId) else { return false }
+        let saved = Transaction(
+            planId: plan.id, exchange: plan.exchange, crypto: plan.crypto, fiat: plan.fiat,
+            fiatAmount: resolved.fiatAmount, cryptoAmount: resolved.cryptoAmount, price: resolved.price,
+            fee: resolved.fee, feeAsset: resolved.feeAsset, status: resolved.status, exchangeOrderId: orderId
+        )
+        try? activeDb.transactionDao.insert(saved)
+        try? activeDb.dcaExecutionDao.mark(planId: plan.id, dayEpoch: day, status: .completed, orderId: orderId)
+        return true
     }
 
     // MARK: - Pending Resolution

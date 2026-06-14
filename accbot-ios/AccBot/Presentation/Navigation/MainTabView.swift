@@ -223,6 +223,10 @@ struct MainTabView: View {
             BackupExportView()
         case .backupImport:
             BackupImportView()
+        case .riskCockpit:
+            RiskCockpitView(deps: dependencies)
+        case .loanManagement:
+            LoanManagementView(deps: dependencies)
         }
     }
 }

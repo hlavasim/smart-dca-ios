@@ -20,6 +20,10 @@ enum AppRoute: Hashable {
     // Backup screens
     case backupExport
     case backupImport
+
+    // Finance (Phase 2)
+    case riskCockpit
+    case loanManagement
 }
 
 /// Bottom navigation tab items

@@ -82,4 +82,8 @@ def main(data_dir):
 
 
 if __name__ == "__main__":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # Windows cp1252 → UTF-8 (české znaky)
+    except Exception:
+        pass
     main(sys.argv[1])

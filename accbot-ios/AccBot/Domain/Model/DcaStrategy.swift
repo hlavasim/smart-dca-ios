@@ -67,12 +67,14 @@ enum DcaStrategy: Equatable, Sendable {
     case classic
     case athBased(tiers: [AthTier] = defaultAthTiers)
     case fearAndGreed(tiers: [FearGreedTier] = defaultFearGreedTiers)
+    case nupl(config: NuplConfig = .default)
 
     var displayName: String {
         switch self {
         case .classic: return String(localized: "Classic")
         case .athBased: return String(localized: "ATH-Based")
         case .fearAndGreed: return String(localized: "Fear & Greed")
+        case .nupl: return String(localized: "NUPL")
         }
     }
 
@@ -84,6 +86,8 @@ enum DcaStrategy: Equatable, Sendable {
             return String(localized: "Buy more when price is far from All-Time High. Buy less near ATH.")
         case .fearAndGreed:
             return String(localized: "Buy more during market fear, less during greed. Uses Fear & Greed Index.")
+        case .nupl:
+            return String(localized: "Kupuj víc, když je NUPL nízko (trh u dna). Spojitá interpolace.")
         }
     }
 
@@ -93,6 +97,7 @@ enum DcaStrategy: Equatable, Sendable {
         case .classic: return "CLASSIC"
         case .athBased: return "ATH_BASED"
         case .fearAndGreed: return "FEAR_AND_GREED"
+        case .nupl: return "NUPL"
         }
     }
 
@@ -102,11 +107,12 @@ enum DcaStrategy: Equatable, Sendable {
         case "CLASSIC": return .classic
         case "ATH_BASED": return .athBased()
         case "FEAR_AND_GREED": return .fearAndGreed()
+        case "NUPL": return .nupl()
         default: return .classic
         }
     }
 
-    static let allStrategies: [DcaStrategy] = [.classic, .athBased(), .fearAndGreed()]
+    static let allStrategies: [DcaStrategy] = [.classic, .athBased(), .fearAndGreed(), .nupl()]
 }
 
 /// Market data required for strategy calculations

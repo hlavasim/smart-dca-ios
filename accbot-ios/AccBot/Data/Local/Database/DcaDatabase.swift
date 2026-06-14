@@ -16,6 +16,7 @@ final class DcaDatabase {
     let notificationDao: NotificationDao
     let withdrawalThresholdDao: WithdrawalThresholdDao
     let monthlySummaryDao: MonthlySummaryDao
+    let nuplDao: NuplDao
 
     // MARK: - Initialization
 
@@ -35,6 +36,7 @@ final class DcaDatabase {
         notificationDao = NotificationDao(dbPool: dbPool)
         withdrawalThresholdDao = WithdrawalThresholdDao(dbPool: dbPool)
         monthlySummaryDao = MonthlySummaryDao(dbPool: dbPool)
+        nuplDao = NuplDao(dbPool: dbPool)
     }
 
     /// Standard production database
@@ -201,6 +203,15 @@ final class DcaDatabase {
         migrator.registerMigration("v3_add_target_amount") { db in
             try db.alter(table: "dca_plans") { t in
                 t.add(column: "targetAmount", .text)
+            }
+        }
+
+        // NUPL hodnoty (bitcoin-data.com) — cache/záloha pro strategii + catch-up
+        migrator.registerMigration("v4_nupl_values") { db in
+            try db.create(table: "nupl_values") { t in
+                t.column("dateEpochDay", .integer).notNull().primaryKey()
+                t.column("nupl", .text).notNull()
+                t.column("fetchedAt", .double).notNull()
             }
         }
 

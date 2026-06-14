@@ -27,6 +27,17 @@ final class CalculateStrategyMultiplierUseCase {
 
         case .fearAndGreed(let tiers):
             return await calculateFearAndGreed(tiers: tiers)
+
+        case .nupl(let config):
+            // Live cesta (dnešní den): NUPL z MarketDataService. Per-day catch-up
+            // (Plán 1 Task 6) počítá multiplikátor z NuplDao přímo.
+            let nupl = await marketDataService.getNuplToday()
+            let mult = NuplConfig.multiplier(nupl: nupl, config: config)
+            return StrategyMultiplierResult(
+                multiplier: mult,
+                reason: nupl.map { "NUPL \(String(format: "%.3f", $0)) → \(formatMultiplier(mult))" }
+                    ?? "NUPL nedostupné, výchozí množství"
+            )
         }
     }
 

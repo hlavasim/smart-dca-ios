@@ -1,0 +1,16 @@
+{
+  "version": "2.0.0",
+  "holdings": [
+    {
+      "id": "h1",
+      "amount": 0.5,
+      "acquisitionDate": "2021-04-21T02:00:00",
+      "purchasePriceCzk": 0.0,
+      "isCollateralized": false,
+      "collateralForLoanIds": [],
+      "isAvailableForDca": true,
+      "source": "Initial",
+      "notes": ""
+    }
+  ]
+}

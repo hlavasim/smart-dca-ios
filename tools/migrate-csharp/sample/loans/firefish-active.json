@@ -1,0 +1,15 @@
+{
+  "loans": [
+    {
+      "externalLoanId": "FF1",
+      "loanDate": "2026-01-10T00:00:00",
+      "maturityDate": "2027-01-10T00:00:00",
+      "loanAmountCzk": 50000.0,
+      "interestRate": 0.1,
+      "btcFeeRate": 0.015,
+      "btcPriceAtLoan": 1200000.0,
+      "collateralBtcAmount": 0.08,
+      "isRepaid": false
+    }
+  ]
+}

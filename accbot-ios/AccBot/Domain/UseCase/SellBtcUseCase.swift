@@ -3,12 +3,12 @@ import Foundation
 /// Prodej BTC s FIFO cost basis + českým daňovým eventem. CoinMate-only.
 final class SellBtcUseCase {
     private let db: DcaDatabase
-    private let coinmate: CoinmateApi
+    private let exchange: ExchangeApi
     private let taxRate: Double
 
-    init(db: DcaDatabase, coinmate: CoinmateApi, taxRate: Double) {
+    init(db: DcaDatabase, exchange: ExchangeApi, taxRate: Double) {
         self.db = db
-        self.coinmate = coinmate
+        self.exchange = exchange
         self.taxRate = taxRate
     }
 
@@ -37,7 +37,7 @@ final class SellBtcUseCase {
 
     /// Provede prodej: CoinMate sell → FIFO alokace → uloží fifo_allocations + sníží holdingy + BtcSale tx.
     func sell(cryptoAmount: Decimal) async throws {
-        let result = await coinmate.marketSell(crypto: "BTC", fiat: "CZK", cryptoAmount: cryptoAmount)
+        let result = await exchange.marketSell(crypto: "BTC", fiat: "CZK", cryptoAmount: cryptoAmount)
         guard case .success(let tx) = result else { return }
         let free = try db.holdingDao.getFree()
         let allocs = Self.fifoAllocate(holdings: free,

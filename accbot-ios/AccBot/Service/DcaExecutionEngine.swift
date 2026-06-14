@@ -11,6 +11,8 @@ final class DcaExecutionEngine {
     private let exchangeApiFactory: ExchangeApiFactory
     private let notificationService: NotificationService
     private let marketDataService: MarketDataService
+    private let snapshotService: SnapshotService?
+    private let gitHubBackupService: GitHubBackupService?
     private let strategyMultiplierUseCase: CalculateStrategyMultiplierUseCase
     private let logger = Logger(subsystem: "com.accbot.dca", category: "DcaExecutionEngine")
 
@@ -25,7 +27,9 @@ final class DcaExecutionEngine {
         userPreferences: UserPreferences,
         exchangeApiFactory: ExchangeApiFactory,
         notificationService: NotificationService,
-        marketDataService: MarketDataService
+        marketDataService: MarketDataService,
+        snapshotService: SnapshotService? = nil,
+        gitHubBackupService: GitHubBackupService? = nil
     ) {
         self.database = database
         self.sandboxDatabase = sandboxDatabase
@@ -34,6 +38,8 @@ final class DcaExecutionEngine {
         self.exchangeApiFactory = exchangeApiFactory
         self.notificationService = notificationService
         self.marketDataService = marketDataService
+        self.snapshotService = snapshotService
+        self.gitHubBackupService = gitHubBackupService
         self.strategyMultiplierUseCase = CalculateStrategyMultiplierUseCase(marketDataService: marketDataService)
     }
 
@@ -416,6 +422,7 @@ final class DcaExecutionEngine {
                 try? activeDb.planDao.updateExecution(id: plan.id,
                     lastExecutedAt: Date(timeIntervalSince1970: Double(day) * 86_400 + 43_200),
                     nextExecutionAt: calculateNextExecution(plan: plan, from: now))
+                await backupAfterChange(reason: "DCA \(plan.crypto) den \(day)")
                 if tx.status == .pending { return } // neznámé → nepokračuj dál
             case .some(.error):
                 // Známá chyba (order neproběhl) → mark failed, pokračuj dalším dnem.
@@ -427,6 +434,16 @@ final class DcaExecutionEngine {
                     message: "Nákup \(plan.crypto) (den \(day)) timeoutoval — ověř ručně na burze.", plan: plan)
                 return
             }
+        }
+    }
+
+    /// Po úspěšné změně stavu pushni snapshot do gitu (potvrzený SHA → lastBackupAt).
+    private func backupAfterChange(reason: String) async {
+        guard let snapshotService, let gitHubBackupService else { return }
+        guard let snap = try? snapshotService.build(from: activeDb, fiat: "CZK"),
+              let data = try? JSONEncoder().encode(snap) else { return }
+        if await gitHubBackupService.push(data, message: "snapshot: \(reason)") != nil {
+            userPreferences.lastBackupAt = Date()
         }
     }
 

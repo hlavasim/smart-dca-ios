@@ -98,6 +98,18 @@ final class UserPreferences: ObservableObject {
         }
     }
 
+    // MARK: - Backup
+
+    @Published var lastBackupAt: Date? {
+        didSet {
+            if let date = lastBackupAt {
+                defaults.set(date.timeIntervalSince1970, forKey: Keys.lastBackupAt)
+            } else {
+                defaults.removeObject(forKey: Keys.lastBackupAt)
+            }
+        }
+    }
+
     // MARK: - Initialization
 
     init(defaults: UserDefaults) {
@@ -118,6 +130,8 @@ final class UserPreferences: ObservableObject {
         self.lastBackgroundRun = bgTimestamp > 0 ? Date(timeIntervalSince1970: bgTimestamp) : nil
         let nuplDayValue = defaults.object(forKey: Keys.lastNuplSyncDay) as? Int
         self.lastNuplSyncDay = nuplDayValue.map(Int64.init)
+        let backupTs = defaults.double(forKey: Keys.lastBackupAt)
+        self.lastBackupAt = backupTs > 0 ? Date(timeIntervalSince1970: backupTs) : nil
     }
 
     func isSandboxMode() -> Bool { sandboxMode }
@@ -139,5 +153,6 @@ final class UserPreferences: ObservableObject {
         static let lastSeenBuildNumber = "lastSeenBuildNumber"
         static let lastBackgroundRun = "lastBackgroundRun"
         static let lastNuplSyncDay = "lastNuplSyncDay"
+        static let lastBackupAt = "lastBackupAt"
     }
 }

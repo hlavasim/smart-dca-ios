@@ -21,6 +21,9 @@ final class AppDependencies: ObservableObject {
     let notificationService: NotificationService
     let dcaExecutionEngine: DcaExecutionEngine
     let syncNuplUseCase: SyncNuplUseCase
+    let tokenStore: TokenStore
+    let snapshotService: SnapshotService
+    let gitHubBackupService: GitHubBackupService
     private var cancellables = Set<AnyCancellable>()
 
     /// Get the active database based on sandbox mode
@@ -52,6 +55,9 @@ final class AppDependencies: ObservableObject {
         // Initialize services
         let marketDataService = MarketDataService(client: networkClient)
         let notificationService = NotificationService()
+        let tokenStore = TokenStore()
+        let snapshotService = SnapshotService()
+        let gitHubBackupService = GitHubBackupService(client: networkClient, tokenStore: tokenStore)
         let dcaExecutionEngine = DcaExecutionEngine(
             database: database,
             sandboxDatabase: sandboxDatabase,
@@ -59,7 +65,9 @@ final class AppDependencies: ObservableObject {
             userPreferences: userPreferences,
             exchangeApiFactory: exchangeApiFactory,
             notificationService: notificationService,
-            marketDataService: marketDataService
+            marketDataService: marketDataService,
+            snapshotService: snapshotService,
+            gitHubBackupService: gitHubBackupService
         )
         let syncNuplUseCase = SyncNuplUseCase(
             nuplDao: database.nuplDao,
@@ -79,6 +87,9 @@ final class AppDependencies: ObservableObject {
         self.notificationService = notificationService
         self.dcaExecutionEngine = dcaExecutionEngine
         self.syncNuplUseCase = syncNuplUseCase
+        self.tokenStore = tokenStore
+        self.snapshotService = snapshotService
+        self.gitHubBackupService = gitHubBackupService
 
         // Forward onboardingPreferences changes so RootView re-renders
         // when onboarding completes (rare event, no perf concern).
@@ -88,5 +99,14 @@ final class AppDependencies: ObservableObject {
 
         // NUPL sync při startu (1×/den guard uvnitř) — data pro NUPL strategii + catch-up
         Task { await syncNuplUseCase.sync() }
+
+        // Obnova z gitu při prázdné DB (migrace z C# i disaster recovery)
+        Task { [database, snapshotService, gitHubBackupService] in
+            let empty = ((try? database.holdingDao.getAll().isEmpty) ?? true)
+                && ((try? database.transactionDao.getTotalCount()) ?? 0) == 0
+            guard empty, let (json, _) = await gitHubBackupService.fetch(),
+                  let snap = try? JSONDecoder().decode(AppSnapshot.self, from: json) else { return }
+            try? snapshotService.load(snap, into: database)
+        }
     }
 }

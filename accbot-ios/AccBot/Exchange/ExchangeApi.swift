@@ -8,6 +8,9 @@ protocol ExchangeApi {
     /// Execute a market buy order
     func marketBuy(crypto: String, fiat: String, fiatAmount: Decimal) async -> DcaResult
 
+    /// Execute a market sell order (CoinMate-only pro páku/daně)
+    func marketSell(crypto: String, fiat: String, cryptoAmount: Decimal) async -> DcaResult
+
     /// Get current balance for a currency
     func getBalance(currency: String) async -> Decimal?
 
@@ -39,6 +42,10 @@ protocol ExchangeApi {
 extension ExchangeApi {
     func getOrderStatus(orderId: String) async -> Transaction? {
         nil
+    }
+
+    func marketSell(crypto: String, fiat: String, cryptoAmount: Decimal) async -> DcaResult {
+        .error(message: "\(exchange.displayName) sell not supported", retryable: false)
     }
 
     func getTradeHistory(

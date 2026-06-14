@@ -19,6 +19,8 @@ final class DcaDatabase {
     let nuplDao: NuplDao
     let dcaExecutionDao: DcaExecutionDao
     let holdingDao: HoldingDao
+    let firefishLoanDao: FirefishLoanDao
+    let bankLoanDao: BankLoanDao
 
     // MARK: - Initialization
 
@@ -44,6 +46,8 @@ final class DcaDatabase {
         nuplDao = NuplDao(dbPool: dbPool)
         dcaExecutionDao = DcaExecutionDao(dbPool: dbPool)
         holdingDao = HoldingDao(dbPool: dbPool)
+        firefishLoanDao = FirefishLoanDao(dbPool: dbPool)
+        bankLoanDao = BankLoanDao(dbPool: dbPool)
     }
 
     /// Standard production database
@@ -250,6 +254,31 @@ final class DcaDatabase {
                 t.column("createdAt", .double).notNull()
             }
             try db.create(index: "idx_holdings_acq", on: "holdings", columns: ["acquisitionDate"])
+        }
+
+        // FF + bankovní půjčky (Phase 2)
+        migrator.registerMigration("v7_loans") { db in
+            try db.create(table: "firefish_loans") { t in
+                t.column("externalLoanId", .text).notNull().primaryKey()
+                t.column("loanDate", .double).notNull()
+                t.column("maturityDate", .double).notNull()
+                t.column("durationDays", .integer).notNull()
+                t.column("loanAmountCzk", .text).notNull()
+                t.column("interestRate", .text).notNull()
+                t.column("btcFeeRate", .text).notNull()
+                t.column("btcPriceAtLoan", .text).notNull()
+                t.column("collateralBtcAmount", .text).notNull()
+                t.column("isRepaid", .boolean).notNull().defaults(to: false)
+            }
+            try db.create(table: "bank_loans") { t in
+                t.column("id", .text).notNull().primaryKey()
+                t.column("principalCzk", .text).notNull()
+                t.column("annualInterestRate", .text).notNull()
+                t.column("durationMonths", .integer).notNull()
+                t.column("remainingPrincipalCzk", .text).notNull()
+                t.column("nextPaymentDate", .double).notNull()
+                t.column("isFullyPaid", .boolean).notNull().defaults(to: false)
+            }
         }
 
         try migrator.migrate(dbPool)

@@ -28,4 +28,20 @@ final class HoldingDao {
     func totalAmount() throws -> Decimal {
         try getAll().reduce(Decimal(0)) { $0 + (Decimal(string: $1.amount) ?? 0) }
     }
+
+    func getFree() throws -> [HoldingRecord] {
+        try dbPool.read { try HoldingRecord.filter(Column("isCollateralized") == false).fetchAll($0) }
+    }
+
+    func getByLoanId(_ loanId: String) throws -> [HoldingRecord] {
+        try dbPool.read { try HoldingRecord.filter(Column("loanId") == loanId).fetchAll($0) }
+    }
+
+    func update(_ r: HoldingRecord) throws {
+        try dbPool.write { try r.update($0) }
+    }
+
+    func delete(id: String) throws {
+        try dbPool.write { _ = try HoldingRecord.deleteOne($0, key: id) }
+    }
 }

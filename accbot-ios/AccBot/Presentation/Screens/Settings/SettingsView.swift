@@ -9,12 +9,14 @@ struct SettingsView: View {
     @State private var showWithdrawalSheet = false
     @State private var showChangelog = false
     @State private var showNotificationInfo = false
+    @State private var patInput = ""
 
     var body: some View {
         Form {
             generalSection
             alertsAndSecuritySection
             dataSection
+            financeSection
             aboutSection
             dangerZoneSection
         }
@@ -337,6 +339,67 @@ struct SettingsView: View {
             Text(String(localized: "Data"))
                 .accessibilityAddTraits(.isHeader)
         }
+    }
+
+    // MARK: - Finance & záloha (Phase 2)
+
+    private var financeSection: some View {
+        Section {
+            Button {
+                router.navigate(to: .riskCockpit)
+            } label: {
+                HStack {
+                    Label(String(localized: "Risk cockpit"), systemImage: "gauge.with.dots.needle.67percent")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(colors.onSurfaceVariant).font(AccBotFonts.captionSmall)
+                }
+            }
+            .listRowBackground(colors.surface)
+
+            Button {
+                router.navigate(to: .loanManagement)
+            } label: {
+                HStack {
+                    Label(String(localized: "Půjčky"), systemImage: "banknote")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(colors.onSurfaceVariant).font(AccBotFonts.captionSmall)
+                }
+            }
+            .listRowBackground(colors.surface)
+
+            Picker(String(localized: "Daňová sazba"), selection: $dependencies.userPreferences.taxRate) {
+                Text("15 %").tag(0.15)
+                Text("23 %").tag(0.23)
+            }
+            .listRowBackground(colors.surface)
+
+            SecureField(String(localized: "GitHub PAT (smart-dca-data)"), text: $patInput)
+                .listRowBackground(colors.surface)
+
+            Button(String(localized: "Uložit PAT")) {
+                dependencies.tokenStore.save(patInput)
+                patInput = ""
+            }
+            .disabled(patInput.isEmpty)
+            .listRowBackground(colors.surface)
+
+            HStack {
+                Text(String(localized: "Poslední git záloha"))
+                Spacer()
+                Text(backupStatusText).foregroundStyle(colors.onSurfaceVariant)
+            }
+            .listRowBackground(colors.surface)
+        } header: {
+            Text(String(localized: "Finance & záloha")).accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private var backupStatusText: String {
+        guard let d = dependencies.userPreferences.lastBackupAt else { return String(localized: "nikdy") }
+        let f = RelativeDateTimeFormatter()
+        return f.localizedString(for: d, relativeTo: Date())
     }
 
     // MARK: - About

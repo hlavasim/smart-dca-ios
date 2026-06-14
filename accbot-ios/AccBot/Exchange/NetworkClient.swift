@@ -135,6 +135,29 @@ final class NetworkClient {
         return try await execute(request)
     }
 
+    // MARK: - PUT (JSON body)
+
+    func put(
+        url: String,
+        body: [String: Any],
+        headers: [String: String] = [:]
+    ) async throws -> (Data, HTTPURLResponse) {
+        guard let url = URL(string: url) else {
+            throw NetworkError.invalidUrl(url)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+
+        return try await execute(request)
+    }
+
     // MARK: - DELETE
 
     func delete(

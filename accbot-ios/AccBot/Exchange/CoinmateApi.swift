@@ -108,6 +108,59 @@ final class CoinmateApi: ExchangeApi {
         }
     }
 
+    func marketSell(crypto: String, fiat: String, cryptoAmount: Decimal) async -> DcaResult {
+        do {
+            let pair = "\(crypto)_\(fiat)"
+            let nonce = CryptoUtils.currentTimestampMs()
+            let signature = createSignature(nonce: nonce)
+
+            let body: [String: String] = [
+                "clientId": clientId,
+                "publicKey": credentials.apiKey,
+                "nonce": "\(nonce)",
+                "signature": signature,
+                "currencyPair": pair,
+                "total": formatDecimal(cryptoAmount, scale: 8), // sellInstant: total = množství BTC
+            ]
+
+            let (data, _) = try await client.postForm(url: "\(baseUrl)/sellInstant", body: body)
+            let json = try parseJson(data)
+
+            if json["error"] as? Bool == true {
+                return .error(message: json["errorMessage"] as? String ?? "Unknown error", retryable: false)
+            }
+
+            let orderId = "\(json["data"] ?? "")"
+            let tradeDetails = await getTradeDetailsByOrderId(orderId, currencyPair: pair)
+
+            let fee: Decimal
+            let soldAmount: Decimal
+            let fillingPrice: Decimal
+            if let details = tradeDetails {
+                soldAmount = details.totalAmount
+                fee = details.totalFee
+                fillingPrice = details.weightedAvgPrice
+            } else {
+                guard let currentPrice = await getCurrentPrice(crypto: crypto, fiat: fiat), currentPrice > 0 else {
+                    return .success(Transaction(planId: 0, exchange: .coinmate, crypto: crypto, fiat: fiat,
+                        fiatAmount: 0, cryptoAmount: cryptoAmount, price: 0, fee: 0, feeAsset: fiat,
+                        status: .pending, exchangeOrderId: orderId))
+                }
+                soldAmount = cryptoAmount
+                fillingPrice = currentPrice
+                fee = roundDecimal(cryptoAmount * currentPrice * takerFeeRate, scale: 2)
+            }
+            let proceeds = roundDecimal(soldAmount * fillingPrice, scale: 2)
+            return .success(Transaction(planId: 0, exchange: .coinmate, crypto: crypto, fiat: fiat,
+                fiatAmount: proceeds, cryptoAmount: soldAmount, price: fillingPrice, fee: fee, feeAsset: fiat,
+                status: .completed, exchangeOrderId: orderId))
+        } catch let error as NetworkError where error.isRetryable {
+            return .error(message: error.localizedDescription, retryable: true)
+        } catch {
+            return .error(message: error.localizedDescription, retryable: false)
+        }
+    }
+
     func getBalance(currency: String) async -> Decimal? {
         do {
             let nonce = CryptoUtils.currentTimestampMs()

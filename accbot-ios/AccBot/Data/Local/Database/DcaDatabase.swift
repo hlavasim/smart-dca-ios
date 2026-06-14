@@ -21,6 +21,7 @@ final class DcaDatabase {
     let holdingDao: HoldingDao
     let firefishLoanDao: FirefishLoanDao
     let bankLoanDao: BankLoanDao
+    let fifoAllocationDao: FifoAllocationDao
 
     // MARK: - Initialization
 
@@ -48,6 +49,7 @@ final class DcaDatabase {
         holdingDao = HoldingDao(dbPool: dbPool)
         firefishLoanDao = FirefishLoanDao(dbPool: dbPool)
         bankLoanDao = BankLoanDao(dbPool: dbPool)
+        fifoAllocationDao = FifoAllocationDao(dbPool: dbPool)
     }
 
     /// Standard production database
@@ -278,6 +280,22 @@ final class DcaDatabase {
                 t.column("remainingPrincipalCzk", .text).notNull()
                 t.column("nextPaymentDate", .double).notNull()
                 t.column("isFullyPaid", .boolean).notNull().defaults(to: false)
+            }
+        }
+
+        // FIFO daňové alokace prodejů (Phase 2)
+        migrator.registerMigration("v8_fifo_allocations") { db in
+            try db.create(table: "fifo_allocations") { t in
+                t.column("id", .text).notNull().primaryKey()
+                t.column("saleDate", .double).notNull()
+                t.column("sourceHoldingId", .text).notNull()
+                t.column("allocatedBtc", .text).notNull()
+                t.column("acquisitionPriceCzk", .text).notNull()
+                t.column("salePriceCzk", .text).notNull()
+                t.column("profitCzk", .text).notNull()
+                t.column("daysHeld", .integer).notNull()
+                t.column("isExempt", .boolean).notNull()
+                t.column("taxAmountCzk", .text).notNull()
             }
         }
 

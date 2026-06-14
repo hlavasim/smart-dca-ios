@@ -110,6 +110,12 @@ final class UserPreferences: ObservableObject {
         }
     }
 
+    // MARK: - Daně
+
+    @Published var taxRate: Double {
+        didSet { defaults.set(taxRate, forKey: Keys.taxRate) }
+    }
+
     // MARK: - Initialization
 
     init(defaults: UserDefaults) {
@@ -132,6 +138,7 @@ final class UserPreferences: ObservableObject {
         self.lastNuplSyncDay = nuplDayValue.map(Int64.init)
         let backupTs = defaults.double(forKey: Keys.lastBackupAt)
         self.lastBackupAt = backupTs > 0 ? Date(timeIntervalSince1970: backupTs) : nil
+        self.taxRate = defaults.object(forKey: Keys.taxRate) as? Double ?? 0.15
     }
 
     func isSandboxMode() -> Bool { sandboxMode }
@@ -154,5 +161,6 @@ final class UserPreferences: ObservableObject {
         static let lastBackgroundRun = "lastBackgroundRun"
         static let lastNuplSyncDay = "lastNuplSyncDay"
         static let lastBackupAt = "lastBackupAt"
+        static let taxRate = "taxRate"
     }
 }

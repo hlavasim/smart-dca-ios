@@ -124,3 +124,64 @@ jobs:
           name: AccBot-Device
           path: accbot-ios/AccBot-unsigned.ipa
           retention-days: 30
+
+  # Po úspěšném buildu+testech na main: vystav .ipa + source.json do rolling
+  # GitHub Release 'latest' → SideStore source pro untethered auto-update.
+  release:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download .ipa artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AccBot-Device
+          path: ipa
+
+      - name: Build source.json + assets
+        run: |
+          mv ipa/AccBot-unsigned.ipa AccBot.ipa
+          SIZE=$(stat -c%s AccBot.ipa)
+          VERSION="1.0.${{ github.run_number }}"
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          ICON=$(ls -S accbot-ios/AccBot/Resources/Assets.xcassets/AppIcon.appiconset/*.png 2>/dev/null | head -1 || true)
+          if [ -n "$ICON" ]; then cp "$ICON" icon.png; fi
+          BASE="https://github.com/${REPO}/releases/download/latest"
+          cat > source.json <<EOF
+          {
+            "name": "Smart DCA (osobní)",
+            "identifier": "com.hlavasim.smartdca.source",
+            "apps": [
+              {
+                "name": "Smart DCA",
+                "bundleIdentifier": "com.accbot.dca",
+                "developerName": "hlavasim",
+                "version": "${VERSION}",
+                "versionDate": "${NOW}",
+                "versionDescription": "Automatický build z main (#${{ github.run_number }})",
+                "downloadURL": "${BASE}/AccBot.ipa",
+                "localizedDescription": "Nativní BTC DCA s NUPL strategií, Firefish pákou, daněmi a git zálohou.",
+                "iconURL": "${BASE}/icon.png",
+                "tintColor": "F7931A",
+                "size": ${SIZE}
+              }
+            ]
+          }
+          EOF
+          cat source.json
+
+      - name: Publish rolling 'latest' release
+        run: |
+          gh release create latest --repo "$REPO" --title "Latest build" \
+            --notes "Rolling build z main (#${{ github.run_number }})" --target "$GITHUB_SHA" 2>/dev/null || true
+          FILES="AccBot.ipa source.json"
+          if [ -f icon.png ]; then FILES="$FILES icon.png"; fi
+          gh release upload latest $FILES --repo "$REPO" --clobber

@@ -18,6 +18,7 @@ final class DcaDatabase {
     let monthlySummaryDao: MonthlySummaryDao
     let nuplDao: NuplDao
     let dcaExecutionDao: DcaExecutionDao
+    let holdingDao: HoldingDao
 
     // MARK: - Initialization
 
@@ -42,6 +43,7 @@ final class DcaDatabase {
         monthlySummaryDao = MonthlySummaryDao(dbPool: dbPool)
         nuplDao = NuplDao(dbPool: dbPool)
         dcaExecutionDao = DcaExecutionDao(dbPool: dbPool)
+        holdingDao = HoldingDao(dbPool: dbPool)
     }
 
     /// Standard production database
@@ -231,6 +233,23 @@ final class DcaDatabase {
                 t.column("updatedAt", .double).notNull()
                 t.primaryKey(["planId", "dayEpoch"])
             }
+        }
+
+        // BTC holdingy s akvizičním datem (port z C#) — pro daně + kolaterál
+        migrator.registerMigration("v6_holdings") { db in
+            try db.create(table: "holdings") { t in
+                t.column("id", .text).notNull().primaryKey()
+                t.column("amount", .text).notNull()
+                t.column("acquisitionDate", .double).notNull()
+                t.column("purchasePriceCzk", .text).notNull()
+                t.column("isCollateralized", .boolean).notNull().defaults(to: false)
+                t.column("loanId", .text)
+                t.column("isAvailableForDca", .boolean).notNull().defaults(to: true)
+                t.column("source", .text).notNull()
+                t.column("notes", .text).notNull().defaults(to: "")
+                t.column("createdAt", .double).notNull()
+            }
+            try db.create(index: "idx_holdings_acq", on: "holdings", columns: ["acquisitionDate"])
         }
 
         try migrator.migrate(dbPool)

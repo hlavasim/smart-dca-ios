@@ -10,7 +10,7 @@ final class FirefishLoanCalcTests: XCTestCase {
             btcPriceAtLoan: 1_000_000, collateralBtcAmount: 0.08, isRepaid: false)
         XCTAssertEqual(dbl(l.interestCzk), 5000, accuracy: 0.01)
         XCTAssertEqual(dbl(l.totalRepaymentCzk), 55000, accuracy: 0.01)
-        XCTAssertEqual(dbl(l.btcFeeAmount), 0.00075, accuracy: 1e-8)
+        XCTAssertEqual(dbl(l.btcFeeAmount), 0.0012, accuracy: 1e-8)  // 0.08 · 0.015 · 1
     }
 }
 

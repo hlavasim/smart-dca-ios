@@ -17,9 +17,8 @@ struct FirefishLoan: Identifiable, Equatable, Sendable {
     var yearFraction: Decimal { Decimal(durationDays) / 365 }
     var interestCzk: Decimal { loanAmountCzk * interestRate * yearFraction }
     var totalRepaymentCzk: Decimal { loanAmountCzk + interestCzk }
-    /// FF poplatek v BTC = (jistina · btcFeeRate · rok) / cena BTC při půjčce.
+    /// FF poplatek v BTC = btcFeeRate p.a. z kolaterálu, prorataně dobou. Nezávisí na ceně BTC.
     var btcFeeAmount: Decimal {
-        let feeCzk = loanAmountCzk * btcFeeRate * yearFraction
-        return btcPriceAtLoan > 0 ? feeCzk / btcPriceAtLoan : 0
+        collateralBtcAmount * btcFeeRate * yearFraction
     }
 }

@@ -15,7 +15,7 @@ final class LoanLifecycleTests: XCTestCase {
             durationDays: 365, interestRate: 0.10, btcFeeRate: 0.015, btcPriceAtLoan: 1_000_000,
             loanDate: Date(timeIntervalSince1970: 1_700_000_000))
         XCTAssertEqual(NSDecimalNumber(decimal: loan.totalRepaymentCzk).doubleValue, 55000, accuracy: 0.01)
-        XCTAssertEqual(NSDecimalNumber(decimal: loan.btcFeeAmount).doubleValue, 0.00075, accuracy: 1e-8)
+        XCTAssertEqual(NSDecimalNumber(decimal: loan.btcFeeAmount).doubleValue, 0.0015, accuracy: 1e-8)  // 0.1 · 0.015 · 1
         XCTAssertEqual(try db.firefishLoanDao.getActive().count, 1)
         XCTAssertEqual(try db.holdingDao.getByLoanId("FF1").count, 1)
     }

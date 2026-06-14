@@ -17,6 +17,7 @@ final class DcaDatabase {
     let withdrawalThresholdDao: WithdrawalThresholdDao
     let monthlySummaryDao: MonthlySummaryDao
     let nuplDao: NuplDao
+    let dcaExecutionDao: DcaExecutionDao
 
     // MARK: - Initialization
 
@@ -40,6 +41,7 @@ final class DcaDatabase {
         withdrawalThresholdDao = WithdrawalThresholdDao(dbPool: dbPool)
         monthlySummaryDao = MonthlySummaryDao(dbPool: dbPool)
         nuplDao = NuplDao(dbPool: dbPool)
+        dcaExecutionDao = DcaExecutionDao(dbPool: dbPool)
     }
 
     /// Standard production database
@@ -215,6 +217,19 @@ final class DcaDatabase {
                 t.column("dateEpochDay", .integer).notNull().primaryKey()
                 t.column("nupl", .text).notNull()
                 t.column("fetchedAt", .double).notNull()
+            }
+        }
+
+        // Idempotency zámek DCA nákupů (planId, dayEpoch) — zápis PŘED nákupem
+        migrator.registerMigration("v5_dca_executions") { db in
+            try db.create(table: "dca_executions") { t in
+                t.column("planId", .integer).notNull()
+                t.column("dayEpoch", .integer).notNull()
+                t.column("status", .text).notNull()
+                t.column("exchangeOrderId", .text)
+                t.column("createdAt", .double).notNull()
+                t.column("updatedAt", .double).notNull()
+                t.primaryKey(["planId", "dayEpoch"])
             }
         }
 

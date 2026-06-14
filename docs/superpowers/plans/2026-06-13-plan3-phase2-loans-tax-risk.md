@@ -470,7 +470,7 @@ final class MaturityAlertTests: XCTestCase {
 ## Self-review (spec coverage Plánu 3)
 
 - **D. FF/bank půjčky + výpočty** → Task 1 (calc) + Task 2 (persistence). ✓
-- **D. LIFO collateral alokace** → není v Phase 2 MVP nutná pro zobrazení rizika (alokace se přebírá z C# migrace přes `loanId` na holdingech); přidat až při tvorbě nové půjčky v appce → **odloženo, zdokumentováno** (zatím se loany zadávají/migrují, nealokují v appce).
+- **D. LIFO collateral alokace + lifecycle půjček (vytvoření/top-up/splacení) + prodej BTC** → přesunuto do **Plánu 4** (`2026-06-14-plan4-loan-lifecycle-btc-sale.md`). Plán 3 řeší jen persistenci, risk, daňový výpočet a zobrazení.
 - **E. Daně 3letý test + FIFO** → Task 3. ✓
 - **F. Risk cockpit + scénáře** → Task 4 (logika) + Task 7 (UI). ✓
 - **F. effectiveLiq, yearsSustainable, breakEven** → Task 4. ✓
@@ -480,7 +480,7 @@ final class MaturityAlertTests: XCTestCase {
 
 ## Otevřené body (předané)
 
-- **LIFO collateral alokace** (CollateralService.cs) — potřeba až když půjde vytvořit FF půjčku přímo v appce; pro Phase 2 (zobrazení + migrace existujících) stačí `loanId` na holdingech. Naplánovat samostatně, pokud bude potřeba.
+- **LIFO collateral alokace + lifecycle** → vyřešeno v **Plánu 4**.
 - `RiskMetricsUseCase.build` je velký — při implementaci rozsekni na podfunkce (scenarios/maturity/tax) s vlastními testy.
 - Tax sazba 0.15 vs 0.23 (high income) — kde nastavit (UserPreferences?).
 - UI scénářové tabulky — sladit s C# zobrazením (6 řádků + „+200k FF" podlinka).

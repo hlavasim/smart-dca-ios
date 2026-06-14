@@ -15,8 +15,10 @@ až celek najednou. Implementace přesto poběží ve fázích (P1 jako základ,
 ale dodá se a otestuje dohromady.
 
 - **Phase 1:** NUPL strategie · migrace z C# · git záloha/obnova + on-device catch-up.
-- **Phase 2:** Firefish pákové půjčky · bankovní půjčky · daně (CZ 3letý test + FIFO) ·
-  risk cockpit (LTV/likvidace/scénáře) · alerty splatnosti + LTV auto top-up.
+- **Phase 2:** Firefish pákové půjčky · bankovní půjčky · **lifecycle půjček
+  (vytvoření/top-up/splacení, LIFO alokace)** · daně (CZ 3letý test + FIFO) ·
+  **prodej BTC (FIFO daňový event)** · risk cockpit (LTV/likvidace/scénáře) ·
+  alerty splatnosti + LTV auto top-up. (Lifecycle + prodej = **Plán 4**.)
 - **Průřezově:** bezpečnost exekuce — idempotence buy orderů + ošetření timeoutů
   (sekce G), aby catch-up nikdy nezpůsobil runaway/duplicitní nákup.
 
@@ -253,6 +255,33 @@ Fix: při nedostupné ceně/trade details vrať `.pending` s `cryptoAmount = 0`
 6. **Sanity ceny.** Množství nikdy z fallback ceny 1; odmítnout/pending když implikovaná
    cena výrazně utíká od spotu.
 
+## H. Lifecycle půjček + prodej BTC (Plán 4)
+
+> Port 1:1 z C# (`CollateralService`, `BtcOperationsService`). Detail v Plánu 4.
+
+**LIFO alokace kolaterálu:** ber **nejnovější** holdingy first (chrání 3letou výjimku
+starých). Split holdingu zachová `acquisitionDate` + `purchasePriceCzk` + `source`
+(kvůli FIFO dani). Epsilon `0.00000001`.
+
+**FF vytvoření:** uživatel zadá loan CZK, kolaterál BTC, dobu, sazby; validace dostatku
+volných BTC; `totalRepayment = principal·(1 + rate·dny/365)`; **FF poplatek 1,5 % p.a.
+se platí v BTC** (`btcFeeAmount = principal·btcFeeRate·dny/365 / btcPriceAtLoan`) — na
+rozdíl od CoinMate trading fee, které je v CZK. Alokace LIFO.
+
+**Top-up:** manuální (addBtc) nebo auto při `LTV ≥ 0.80` → `addBtc = kolaterál · 0.20`.
+Stejná LIFO alokace.
+
+**FF splacení:** `isRepaid=true`, **uvolnění kolaterálu** (`isCollateralized=false`,
+`loanId=nil`) — **žádný prodej, žádný daňový event**.
+
+**Bank půjčka:** vytvoření (anuita), měsíční splátky (interest = remaining·rate/12,
+principal = splátka − interest, remaining −= principal), catch-up dlužných měsíců.
+
+**Prodej BTC (jediný FIFO daňový event):** spotřebuj **nejstarší** free holdingy first;
+`>1095 dní → osvobozeno`; daní se **jen zisk** sazbou `0.15` (std) / `0.23` (high income,
+volitelné v `UserPreferences`). CoinMate `marketSell` (`/sellInstant`) — app je dnes
+buy-only, prodej je **CoinMate-only**. Uloží `fifo_allocations` + `BtcSale` transakci.
+
 ---
 
 ## Snapshot schéma (Phase 1+2)
@@ -324,7 +353,8 @@ z holdingů + transakcí (neukládají se do snapshotu zvlášť, dokud nenastan
 - Multi-device real-time sync / CRDT (jen single-device git záloha).
 - Šifrování snapshotu (plain JSON v private repu stačí).
 - CloudKit / iCloud Keychain (nekompatibilní se SideStore signingem).
-- Další burzy nad rámec CoinMate pro NUPL/páku (ostatní burzy zůstávají z AccBotu, ale FF/daně jsou CoinMate/CZK).
+- Další burzy nad rámec CoinMate pro NUPL/páku (ostatní burzy zůstávají z AccBotu, ale FF/daně/prodej jsou CoinMate/CZK).
+- **Výběr BTC z burzy (withdrawal)** — odloženo (uživatel zatím nechce).
 
 ## Otevřené body pro plán
 

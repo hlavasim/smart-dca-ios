@@ -89,6 +89,35 @@ final class SnapshotService {
                 nextPaymentDate: (dayFmt.date(from: l.nextPaymentDate) ?? Date()).timeIntervalSince1970,
                 isFullyPaid: l.isFullyPaid)
         })
-        // Pozn.: transakce/plán load (re-importovatelné z CoinMate) lze doplnit dle potřeby.
+        // Plán + transakce → aby je viděl původní Portfolio/Dashboard (čte z 'transactions').
+        let baseChunk = (Decimal(string: snap.strategy.baseChunkCzk) ?? 0)
+            * (Decimal(string: snap.strategy.baseChunkMultiplier) ?? 1)
+        let cfg = NuplConfig(
+            bottomValue: snap.strategy.nuplBottomValue, centerValue: snap.strategy.nuplCenterValue,
+            minMultiplier: Float(snap.strategy.nuplMinMultiplier), maxMultiplier: Float(snap.strategy.nuplMaxMultiplier))
+        let existing = (try? db.planDao.getAll()) ?? []
+        let planId: Int64
+        if let nuplPlan = existing.first(where: { if case .nupl = $0.strategy { return true }; return false }) {
+            planId = nuplPlan.id
+        } else {
+            let last = dayFmt.date(from: snap.strategy.lastProcessedDate)
+            planId = (try? db.planDao.insert(DcaPlan(
+                exchange: .coinmate, crypto: "BTC", fiat: "CZK", amount: baseChunk,
+                frequency: .daily, strategy: .nupl(config: cfg), lastExecutedAt: last))) ?? 0
+        }
+        // transakce jen když je tabulka prázdná (idempotence, žádné duplicity)
+        let txCount = (try? db.transactionDao.getTotalCount()) ?? 0
+        if planId != 0 && txCount == 0 {
+            let txs = snap.transactions.map { t -> Transaction in
+                Transaction(
+                    planId: planId, exchange: .coinmate, crypto: "BTC", fiat: "CZK",
+                    fiatAmount: abs(Decimal(string: t.amountCzk) ?? 0),
+                    cryptoAmount: Decimal(string: t.amountBtc) ?? 0,
+                    price: Decimal(string: t.btcPriceCzk) ?? 0, fee: 0, status: .completed,
+                    exchangeOrderId: t.exchangeOrderId,
+                    executedAt: dayFmt.date(from: t.date) ?? Date())
+            }
+            try? db.transactionDao.insertBatch(txs)
+        }
     }
 }

@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var showChangelog = false
     @State private var showNotificationInfo = false
     @State private var patInput = ""
+    @State private var restoreMsg: String?
 
     var body: some View {
         Form {
@@ -381,9 +382,31 @@ struct SettingsView: View {
             Button(String(localized: "Uložit PAT")) {
                 dependencies.tokenStore.save(patInput)
                 patInput = ""
+                restoreMsg = String(localized: "PAT uložen ✓")
             }
             .disabled(patInput.isEmpty)
             .listRowBackground(colors.surface)
+
+            Button(String(localized: "Stáhnout zálohu teď")) {
+                restoreMsg = String(localized: "Stahuji…")
+                Task {
+                    if let (json, _) = await dependencies.gitHubBackupService.fetch(),
+                       let snap = try? JSONDecoder().decode(AppSnapshot.self, from: json) {
+                        try? dependencies.snapshotService.load(snap, into: dependencies.activeDatabase)
+                        restoreMsg = String(localized: "Záloha stažena ✓ (restartuj appku)")
+                    } else {
+                        restoreMsg = String(localized: "Nepovedlo se — zkontroluj PAT / repo")
+                    }
+                }
+            }
+            .listRowBackground(colors.surface)
+
+            if let restoreMsg {
+                Text(restoreMsg)
+                    .font(AccBotFonts.caption)
+                    .foregroundStyle(colors.onSurfaceVariant)
+                    .listRowBackground(colors.surface)
+            }
 
             HStack {
                 Text(String(localized: "Poslední git záloha"))

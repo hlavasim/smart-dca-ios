@@ -105,6 +105,7 @@ jobs:
           xcodebuild build \
             -project AccBot.xcodeproj \
             -scheme AccBot \
+            -configuration Release \
             -destination 'generic/platform=iOS' \
             -clonedSourcePackagesDirPath SourcePackages \
             -derivedDataPath DerivedData \
@@ -115,7 +116,7 @@ jobs:
       - name: Package unsigned .ipa
         run: |
           mkdir -p Payload
-          cp -r DerivedData/Build/Products/Debug-iphoneos/AccBot.app Payload/
+          cp -r DerivedData/Build/Products/Release-iphoneos/AccBot.app Payload/
           zip -r AccBot-unsigned.ipa Payload
 
       - name: Upload device build

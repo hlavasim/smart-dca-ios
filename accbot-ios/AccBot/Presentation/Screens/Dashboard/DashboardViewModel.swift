@@ -7,6 +7,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var plans: [DcaPlan] = []
     @Published var plansWithBalance: [PlanWithBalance] = []
     @Published var holdings: [HoldingInfo] = []
+    @Published var netWorth: NetWorthSummary?
     @Published var isLoading = true
     @Published var showRunNowSheet = false
     @Published var selectedPlanIds: Set<Int64> = []
@@ -84,6 +85,27 @@ final class DashboardViewModel: ObservableObject {
         let fiatGainLoss: Decimal?
     }
 
+    /// Celkový pohled: kolik BTC reálně držím (z holdings, ne z transakcí),
+    /// jeho hodnota při živé ceně, a proti tomu dluhy (Firefish + banka).
+    struct NetWorthSummary {
+        let heldBtc: Decimal
+        let btcPriceCzk: Decimal?
+        let btcValueCzk: Decimal?
+        let firefishDebtCzk: Decimal
+        let bankDebtCzk: Decimal
+        let firefishLoanCount: Int
+        let bankLoanCount: Int
+
+        var totalDebtCzk: Decimal { firefishDebtCzk + bankDebtCzk }
+        var netWorthCzk: Decimal? { btcValueCzk.map { $0 - totalDebtCzk } }
+        /// Loan-to-value napříč celým portfoliem (dluh / hodnota aktiv) v %.
+        var ltvPercent: Double? {
+            guard let v = btcValueCzk, v > 0 else { return nil }
+            return (Double(truncating: totalDebtCzk as NSDecimalNumber)
+                / Double(truncating: v as NSDecimalNumber)) * 100
+        }
+    }
+
     struct AthCryptoInfo: Identifiable {
         var id: String { crypto }
         let crypto: String
@@ -116,11 +138,42 @@ final class DashboardViewModel: ObservableObject {
     func loadDataAsync() async {
         await loadPlans()
         await loadHoldings()
+        await loadNetWorth()
         announceForVoiceOver(String(localized: "Dashboard loaded"))
         await fetchBalancesForPlans()
         if showMarketPulse {
             await fetchMarketData()
         }
+    }
+
+    /// Spočítá čisté jmění: držené BTC × živá cena − (Firefish + bankovní dluhy).
+    /// Vše defenzivně (try?), aby prázdná/částečná data nikdy neshodila Dashboard.
+    func loadNetWorth() async {
+        let db = deps.activeDatabase
+        let heldBtc = (try? db.holdingDao.totalAmount()) ?? 0
+        let ffLoans = (try? db.firefishLoanDao.getActive()) ?? []
+        let bankLoans = (try? db.bankLoanDao.getActive()) ?? []
+        let ffDebt = ffLoans.reduce(Decimal(0)) { $0 + (Decimal(string: $1.loanAmountCzk) ?? 0) }
+        let bankDebt = bankLoans.reduce(Decimal(0)) { $0 + (Decimal(string: $1.remainingPrincipalCzk) ?? 0) }
+
+        // Žádné BTC ani dluhy → není co zobrazovat (skryje kartu).
+        guard heldBtc > 0 || ffDebt > 0 || bankDebt > 0 else {
+            netWorth = nil
+            return
+        }
+
+        let price: Decimal? = await withTimeoutOrNil(seconds: 10) {
+            await self.deps.marketDataService.getCurrentPrice(crypto: "BTC", fiat: "CZK")
+        }
+        netWorth = NetWorthSummary(
+            heldBtc: heldBtc,
+            btcPriceCzk: price,
+            btcValueCzk: price.map { heldBtc * $0 },
+            firefishDebtCzk: ffDebt,
+            bankDebtCzk: bankDebt,
+            firefishLoanCount: ffLoans.count,
+            bankLoanCount: bankLoans.count
+        )
     }
 
     func loadPlans() async {
@@ -407,6 +460,7 @@ final class DashboardViewModel: ObservableObject {
         isRefreshingPrices = true
         Task {
             await loadHoldings()
+            await loadNetWorth()
             await fetchBalancesForPlans()
             if showMarketPulse {
                 await fetchMarketData()

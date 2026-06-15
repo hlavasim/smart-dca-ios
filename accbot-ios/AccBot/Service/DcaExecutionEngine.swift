@@ -442,6 +442,22 @@ final class DcaExecutionEngine {
         guard let snapshotService, let gitHubBackupService else { return }
         guard let snap = try? snapshotService.build(from: activeDb, fiat: "CZK"),
               let data = try? JSONEncoder().encode(snap) else { return }
+
+        // Ochrana proti ztrátě dat: lokální snapshot bez holdingů/půjček (DB ještě nebyla
+        // obnovená) nesmí přepsat remote zálohu, která je má. Přesně tahle situace kdysi
+        // smazala migraci. Když je lokál prázdný a remote ne → přeskoč push a upozorni.
+        if snap.holdings.isEmpty && snap.firefishLoans.isEmpty && snap.bankLoans.isEmpty {
+            if let (json, _) = await gitHubBackupService.fetch(),
+               let remote = try? JSONDecoder().decode(AppSnapshot.self, from: json),
+               !(remote.holdings.isEmpty && remote.firefishLoans.isEmpty && remote.bankLoans.isEmpty) {
+                try? activeDb.notificationDao.insert(AppNotification(
+                    type: .error,
+                    title: "Záloha přeskočena",
+                    message: "Lokální data jsou neúplná (chybí holdingy/půjčky) — záloha by přepsala dobrá data v gitu. Otevři Nastavení → „Stáhnout zálohu teď\"."))
+                return
+            }
+        }
+
         if await gitHubBackupService.push(data, message: "snapshot: \(reason)") != nil {
             userPreferences.lastBackupAt = Date()
         }

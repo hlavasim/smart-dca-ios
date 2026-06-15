@@ -100,11 +100,13 @@ final class AppDependencies: ObservableObject {
         // NUPL sync při startu (1×/den guard uvnitř) — mimo main (těžký zápis do DB, ať nesekne UI)
         Task.detached { await syncNuplUseCase.sync() }
 
-        // Obnova z gitu při prázdné DB (migrace z C# i disaster recovery) — mimo main
+        // Obnova z gitu, když chybí holdingy (migrace z C# i disaster recovery) — mimo main.
+        // Pozor: stačí prázdné holdingy, NE celá DB. DB mohla mít transakce z předchozí
+        // verze a přesto 0 holdingů — pak load() doplní holdingy + půjčky (a transakce jen
+        // pokud chybí). To je přesně stav, kdy appka kdysi přepsala migraci prázdnotou.
         Task.detached { [database, snapshotService, gitHubBackupService] in
-            let empty = ((try? database.holdingDao.getAll().isEmpty) ?? true)
-                && ((try? database.transactionDao.getTotalCount()) ?? 0) == 0
-            guard empty, let (json, _) = await gitHubBackupService.fetch(),
+            let needsRestore = ((try? database.holdingDao.getAll().isEmpty) ?? true)
+            guard needsRestore, let (json, _) = await gitHubBackupService.fetch(),
                   let snap = try? JSONDecoder().decode(AppSnapshot.self, from: json) else { return }
             try? snapshotService.load(snap, into: database)
         }

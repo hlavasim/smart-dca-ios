@@ -86,6 +86,14 @@ struct DashboardView: View {
                 SandboxBanner()
             }
 
+            if let netWorth = viewModel.netWorth {
+                NetWorthCard(
+                    summary: netWorth,
+                    onTapLoans: { router.navigate(to: .loanManagement) },
+                    onTapRisk: { router.navigate(to: .riskCockpit) }
+                )
+            }
+
             if viewModel.showMarketPulse && (viewModel.fearGreedValue != nil || !viewModel.athData.isEmpty) {
                 marketPulseCard
             }
@@ -110,6 +118,15 @@ struct DashboardView: View {
             if colors.isSandbox {
                 SandboxBanner()
                     .padding(.horizontal, Spacing.lg)
+            }
+
+            if let netWorth = viewModel.netWorth {
+                NetWorthCard(
+                    summary: netWorth,
+                    onTapLoans: { router.navigate(to: .loanManagement) },
+                    onTapRisk: { router.navigate(to: .riskCockpit) }
+                )
+                .padding(.horizontal, Spacing.lg)
             }
 
             if viewModel.showMarketPulse && (viewModel.fearGreedValue != nil || !viewModel.athData.isEmpty) {

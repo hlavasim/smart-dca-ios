@@ -41,7 +41,8 @@ def main(data_dir):
             "nuplBottomValue": 0.0, "nuplCenterValue": 0.5,
             "nuplMinMultiplier": 0.5, "nuplMaxMultiplier": 3.0,
             "baseChunkCzk": str(s["baseChunkCzk"]),
-            "baseChunkMultiplier": "0.8",
+            # base chunk = plná denní částka; NUPL multiplikátor škáluje v appce
+            "baseChunkMultiplier": "1.0",
             "lastProcessedDate": day(s["lastProcessedDate"]),
             "availableCashCzk": str(s["availableCashCzk"]),
         },

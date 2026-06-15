@@ -97,10 +97,21 @@ final class SnapshotService {
             minMultiplier: Float(snap.strategy.nuplMinMultiplier), maxMultiplier: Float(snap.strategy.nuplMaxMultiplier))
         let existing = (try? db.planDao.getAll()) ?? []
         let planId: Int64
+        let last = dayFmt.date(from: snap.strategy.lastProcessedDate)
         if let nuplPlan = existing.first(where: { if case .nupl = $0.strategy { return true }; return false }) {
             planId = nuplPlan.id
+            // Sjednoť base chunk (amount) + NUPL config se snapshotem — jinak plán zůstane
+            // na staré/špatné částce (kdysi 100 Kč ze starého snapshotu) a NUPL koupí míň.
+            let updated = DcaPlan(
+                id: nuplPlan.id, exchange: nuplPlan.exchange, crypto: nuplPlan.crypto,
+                fiat: nuplPlan.fiat, amount: baseChunk, frequency: nuplPlan.frequency,
+                cronExpression: nuplPlan.cronExpression, strategy: .nupl(config: cfg),
+                isEnabled: nuplPlan.isEnabled, withdrawalEnabled: nuplPlan.withdrawalEnabled,
+                withdrawalAddress: nuplPlan.withdrawalAddress, targetAmount: nuplPlan.targetAmount,
+                createdAt: nuplPlan.createdAt, lastExecutedAt: nuplPlan.lastExecutedAt,
+                nextExecutionAt: nuplPlan.nextExecutionAt)
+            try? db.planDao.update(updated)
         } else {
-            let last = dayFmt.date(from: snap.strategy.lastProcessedDate)
             planId = (try? db.planDao.insert(DcaPlan(
                 exchange: .coinmate, crypto: "BTC", fiat: "CZK", amount: baseChunk,
                 frequency: .daily, strategy: .nupl(config: cfg), lastExecutedAt: last))) ?? 0

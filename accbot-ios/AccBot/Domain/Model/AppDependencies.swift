@@ -97,11 +97,11 @@ final class AppDependencies: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
-        // NUPL sync při startu (1×/den guard uvnitř) — data pro NUPL strategii + catch-up
-        Task { await syncNuplUseCase.sync() }
+        // NUPL sync při startu (1×/den guard uvnitř) — mimo main (těžký zápis do DB, ať nesekne UI)
+        Task.detached { await syncNuplUseCase.sync() }
 
-        // Obnova z gitu při prázdné DB (migrace z C# i disaster recovery)
-        Task { [database, snapshotService, gitHubBackupService] in
+        // Obnova z gitu při prázdné DB (migrace z C# i disaster recovery) — mimo main
+        Task.detached { [database, snapshotService, gitHubBackupService] in
             let empty = ((try? database.holdingDao.getAll().isEmpty) ?? true)
                 && ((try? database.transactionDao.getTotalCount()) ?? 0) == 0
             guard empty, let (json, _) = await gitHubBackupService.fetch(),

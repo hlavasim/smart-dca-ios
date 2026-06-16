@@ -7,6 +7,11 @@ struct DashboardView: View {
     @Environment(\.accBotColors) private var colors
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var showRunConfirmation = false
+    @State private var showManualBuy = false
+    @State private var mbMode = 0
+    @State private var mbBtc = ""
+    @State private var mbCzk = ""
+    @State private var mbDate = Date()
 
     private var isLandscape: Bool {
         verticalSizeClass == .compact
@@ -65,14 +70,20 @@ struct DashboardView: View {
                 AccBotHeaderLogo(isSandbox: colors.isSandbox)
             }
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    router.navigate(to: .addPlan)
+                Menu {
+                    Button { router.navigate(to: .addPlan) } label: {
+                        Label(String(localized: "Přidat DCA plán"), systemImage: "plus")
+                    }
+                    Button { showManualBuy = true } label: {
+                        Label(String(localized: "Ruční nákup BTC"), systemImage: "bitcoinsign.circle")
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
-                .accessibilityLabel(String(localized: "Add DCA plan"))
+                .accessibilityLabel(String(localized: "Přidat"))
             }
         }
+        .sheet(isPresented: $showManualBuy) { manualBuySheet }
         .onAppear {
             viewModel.setup(dependencies)
         }
@@ -231,7 +242,7 @@ struct DashboardView: View {
                     Button {
                         router.portfolioSelectedCrypto = holding.crypto
                         router.portfolioSelectedFiat = holding.fiat
-                        router.selectedTab = .portfolio
+                        router.navigate(to: .portfolioChart)
                     } label: {
                         holdingCard(holding)
                     }
@@ -702,6 +713,53 @@ struct DashboardView: View {
         .background(colors.background)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Ruční nákup BTC
+
+    private var manualBuySheet: some View {
+        NavigationStack {
+            Form {
+                Picker(String(localized: "Režim"), selection: $mbMode) {
+                    Text(String(localized: "Zaznamenat (koupeno mimo)")).tag(0)
+                    Text(String(localized: "Koupit teď přes CoinMate")).tag(1)
+                }
+                .pickerStyle(.segmented)
+
+                TextField(String(localized: "Částka CZK"), text: $mbCzk).keyboardType(.decimalPad)
+                if mbMode == 0 {
+                    TextField(String(localized: "Množství BTC"), text: $mbBtc).keyboardType(.decimalPad)
+                    DatePicker(String(localized: "Datum nákupu"), selection: $mbDate, displayedComponents: .date)
+                } else {
+                    Text(String(localized: "Koupí se teď na CoinMate za zadanou částku (mimo schedule)."))
+                        .font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
+                }
+            }
+            .navigationTitle(String(localized: "Ruční nákup BTC"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "Zrušit")) { resetManualBuy() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(mbMode == 0 ? String(localized: "Zaznamenat") : String(localized: "Koupit")) {
+                        let czk = Decimal(string: mbCzk.replacingOccurrences(of: ",", with: ".")) ?? 0
+                        if mbMode == 0 {
+                            let btc = Decimal(string: mbBtc.replacingOccurrences(of: ",", with: ".")) ?? 0
+                            if btc > 0 && czk > 0 { viewModel.manualRecordBuy(btc: btc, czk: czk, date: mbDate) }
+                        } else {
+                            if czk > 0 { Task { await viewModel.manualBuyNow(czk: czk) } }
+                        }
+                        resetManualBuy()
+                    }
+                    .disabled(mbCzk.isEmpty || (mbMode == 0 && mbBtc.isEmpty))
+                }
+            }
+        }
+    }
+
+    private func resetManualBuy() {
+        showManualBuy = false; mbBtc = ""; mbCzk = ""; mbMode = 0; mbDate = Date()
     }
 
     // MARK: - Select All

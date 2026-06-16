@@ -22,10 +22,6 @@ struct MainTabView: View {
 
             dashboardTab
                 .tag(TabItem.dashboard)
-                .tabItem { Label(String(localized: "BTC"), systemImage: "bitcoinsign.circle") }
-
-            portfolioTab
-                .tag(TabItem.portfolio)
                 .tabItem { Label(String(localized: "Portfolio"), systemImage: "chart.pie") }
 
             notificationsTab
@@ -141,6 +137,8 @@ struct MainTabView: View {
             LoanManagementView(deps: dependencies)
         case .cashflowCockpit:
             CashflowCockpitView(deps: dependencies)
+        case .portfolioChart:
+            PortfolioView()
         }
     }
 }

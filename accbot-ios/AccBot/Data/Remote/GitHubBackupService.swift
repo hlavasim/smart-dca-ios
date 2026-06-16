@@ -45,19 +45,26 @@ final class GitHubBackupService {
         }
     }
 
-    /// Push snapshot. Vrací commit SHA při úspěchu, nil při selhání/chybě tokenu.
+    /// Push snapshot.json. Zkratka pro push(_:path:message:).
     @discardableResult
     func push(_ snapshotJson: Data, message: String) async -> String? {
+        await push(snapshotJson, path: path, message: message)
+    }
+
+    /// Push libovolného souboru do repa (snapshot.json, fio-overrides.json…).
+    /// Vrací commit SHA při úspěchu, nil při selhání/chybě tokenu.
+    @discardableResult
+    func push(_ data: Data, path: String, message: String) async -> String? {
         guard let headers = authHeaders else { return nil }
-        let existingSha = await fetch()?.sha
+        let existingSha = await fetch(path: path)?.sha
         var body: [String: Any] = [
             "message": message,
-            "content": snapshotJson.base64EncodedString(),
+            "content": data.base64EncodedString(),
         ]
         if let existingSha { body["sha"] = existingSha }
         do {
-            let (data, _) = try await client.put(url: contentsUrl, body: body, headers: headers)
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let (resp, _) = try await client.put(url: contentsUrl(for: path), body: body, headers: headers)
+            let json = try JSONSerialization.jsonObject(with: resp) as? [String: Any]
             return (json?["commit"] as? [String: Any])?["sha"] as? String
         } catch {
             return nil

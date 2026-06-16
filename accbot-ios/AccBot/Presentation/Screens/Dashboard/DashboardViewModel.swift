@@ -470,6 +470,47 @@ final class DashboardViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Ruční nákup BTC
+
+    /// Zaznamenat nákup udělaný mimo appku (jen zápis, bez burzy).
+    func manualRecordBuy(btc: Decimal, czk: Decimal, date: Date) {
+        _ = ManualBuyUseCase(db: deps.activeDatabase)
+            .record(btcAmount: btc, czkAmount: czk, date: date, orderId: "MANUAL-EXT", source: "Manual")
+        runResultMessage = String(localized: "Zaznamenáno \(AccBotFormatters.formatCrypto(btc, symbol: "BTC"))")
+        Task { await loadHoldings(); await loadNetWorth() }
+        backupToGit("ruční zápis nákupu BTC")
+    }
+
+    /// Nákup mimo schedule přes CoinMate (custom částka).
+    func manualBuyNow(czk: Decimal) async {
+        let isSandbox = deps.userPreferences.isSandboxMode()
+        guard let creds = deps.credentialsStore.get(for: .coinmate, isSandbox: isSandbox) else {
+            errorMessage = String(localized: "Chybí CoinMate klíče (Nastavení → burzy)")
+            return
+        }
+        let api = deps.exchangeApiFactory.create(credentials: creds)
+        switch await ManualBuyUseCase(db: deps.activeDatabase).buyNow(czkAmount: czk, api: api) {
+        case .success(let btc):
+            runResultMessage = String(localized: "Koupeno \(AccBotFormatters.formatCrypto(btc, symbol: "BTC"))")
+        case .failure(let msg):
+            errorMessage = msg
+        }
+        await loadHoldings(); await loadNetWorth()
+        backupToGit("ruční nákup BTC přes CoinMate")
+    }
+
+    private func backupToGit(_ reason: String) {
+        let db = deps.activeDatabase
+        let snapshotService = deps.snapshotService
+        let gitHub = deps.gitHubBackupService
+        Task.detached {
+            guard let snap = try? snapshotService.build(from: db, fiat: "CZK"),
+                  !(snap.holdings.isEmpty && snap.firefishLoans.isEmpty && snap.bankLoans.isEmpty),
+                  let data = try? JSONEncoder().encode(snap) else { return }
+            _ = await gitHub.push(data, message: "snapshot: \(reason)")
+        }
+    }
+
     // MARK: - Market Pulse
 
     func fetchMarketData() async {

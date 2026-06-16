@@ -23,6 +23,24 @@ final class FioCategoryStore {
     func set(_ category: String, for txId: String) {
         var m = all()
         m[txId] = category
+        save(m)
+    }
+
+    /// Smaže override (transakce se vrátí mezi „Nezařazeno").
+    func remove(txId: String) {
+        var m = all()
+        m[txId] = nil
+        save(m)
+    }
+
+    /// Sloučí kategorie z gitu (git je zdroj pravdy pro klíče v něm; lokální navíc zůstanou).
+    func merge(_ remote: [String: String]) {
+        var m = all()
+        for (k, v) in remote { m[k] = v }
+        save(m)
+    }
+
+    private func save(_ m: [String: String]) {
         if let data = try? JSONEncoder().encode(m) { defaults.set(data, forKey: key) }
     }
 }

@@ -12,6 +12,8 @@ struct CashflowCockpitView: View {
     @State private var selectedCategory = ""
     @State private var noteText = ""
     @State private var paycheckText = ""
+    @State private var categorizingTx: FioTransaction?
+    @State private var showHiddenFio = false
 
     init(deps: AppDependencies) {
         _vm = StateObject(wrappedValue: CashflowCockpitViewModel(deps: deps))
@@ -34,7 +36,7 @@ struct CashflowCockpitView: View {
                     paycheckCard
                     categoriesCard
                     if !vm.standingVisible.isEmpty { standingCard }
-                    if !vm.investedFlow.isEmpty { investedCard }
+                    if !vm.internalTransfers.isEmpty { transferCard }
                     contextCard
                 }
             }
@@ -45,6 +47,7 @@ struct CashflowCockpitView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.load() }
         .sheet(isPresented: $showAddSpend) { addSpendSheet }
+        .sheet(item: $categorizingTx) { tx in categorizeSheet(tx) }
     }
 
     // MARK: - Hero: výhled do výplaty
@@ -268,32 +271,103 @@ struct CashflowCockpitView: View {
 
     private var fioTransactionsCard: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text(String(localized: "Fio transakce (klepni na kategorii)")).font(AccBotFonts.titleSmall)
+            Text(String(localized: "Fio transakce (klepni a zařaď)")).font(AccBotFonts.titleSmall)
                 .foregroundStyle(colors.onSurface)
-            ForEach(vm.fioTransactions) { tx in
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(tx.counterparty.isEmpty ? "—" : tx.counterparty)
-                            .font(AccBotFonts.body).foregroundStyle(colors.onSurface).lineLimit(1)
-                        Menu {
-                            Button(String(localized: "Skrýt (nepočítat)")) {
-                                vm.setFioCategory(FioCategoryStore.hidden, for: tx)
-                            }
-                            ForEach(categoryOptions, id: \.self) { cat in
-                                Button(cat) { vm.setFioCategory(cat, for: tx) }
-                            }
-                        } label: {
-                            Text(vm.fioCategory(for: tx)).font(AccBotFonts.caption).foregroundStyle(colors.primary)
+            ForEach(vm.visibleFioTransactions) { tx in
+                Button { categorizingTx = tx } label: { fioRow(tx) }
+                    .buttonStyle(.plain)
+            }
+            if !vm.hiddenFioTransactions.isEmpty {
+                DisclosureGroup(isExpanded: $showHiddenFio) {
+                    ForEach(vm.hiddenFioTransactions) { tx in
+                        HStack {
+                            Text(tx.counterparty.isEmpty ? "—" : tx.counterparty)
+                                .font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
+                                .strikethrough().lineLimit(1)
+                            Spacer()
+                            Text(fmtD(tx.amountCzk)).font(AccBotFonts.caption)
+                                .foregroundStyle(colors.onSurfaceVariant)
+                            Button(String(localized: "Vrátit")) { vm.unhideFio(tx) }
+                                .font(AccBotFonts.caption).foregroundStyle(colors.primary)
                         }
+                        .padding(.vertical, 1)
                     }
-                    Spacer()
-                    Text(fmtD(tx.amountCzk)).font(AccBotFonts.body)
-                        .foregroundStyle(tx.amountCzk < 0 ? colors.onSurface : colors.success)
+                } label: {
+                    Text(String(localized: "Skryté (\(vm.hiddenFioTransactions.count))"))
+                        .font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
                 }
-                .padding(.vertical, 1)
+                .tint(colors.onSurfaceVariant)
             }
         }
         .modifier(Card(colors: colors))
+    }
+
+    private func fioRow(_ tx: FioTransaction) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(tx.counterparty.isEmpty ? "—" : tx.counterparty)
+                    .font(AccBotFonts.body).foregroundStyle(colors.onSurface).lineLimit(1)
+                Text(vm.fioCategory(for: tx))
+                    .font(AccBotFonts.caption)
+                    .foregroundStyle(vm.fioCategory(for: tx) == String(localized: "Nezařazeno") ? colors.warning : colors.primary)
+            }
+            Spacer()
+            Text(fmtD(tx.amountCzk)).font(AccBotFonts.body)
+                .foregroundStyle(tx.amountCzk < 0 ? colors.onSurface : colors.success)
+            Image(systemName: "chevron.right").font(AccBotFonts.captionSmall)
+                .foregroundStyle(colors.onSurfaceVariant)
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+    }
+
+    /// Sheet pro zařazení Fio transakce — otevře se hned (žádné 10s čekání jako u Menu).
+    private func categorizeSheet(_ tx: FioTransaction) -> some View {
+        NavigationStack {
+            List {
+                Section {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text(tx.counterparty.isEmpty ? "—" : tx.counterparty)
+                            .font(AccBotFonts.titleSmall).foregroundStyle(colors.onSurface)
+                        Text(fmtD(tx.amountCzk)).font(AccBotFonts.headline)
+                            .foregroundStyle(tx.amountCzk < 0 ? colors.onSurface : colors.success)
+                        if !tx.note.isEmpty {
+                            Text(tx.note).font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
+                        }
+                    }
+                }
+                Section {
+                    Button(role: .destructive) {
+                        vm.setFioCategory(FioCategoryStore.hidden, for: tx); categorizingTx = nil
+                    } label: {
+                        Label(String(localized: "Skrýt (nepočítat — převod/investice)"), systemImage: "eye.slash")
+                    }
+                }
+                Section(String(localized: "Kategorie")) {
+                    ForEach(categoryOptions, id: \.self) { cat in
+                        Button {
+                            vm.setFioCategory(cat, for: tx); categorizingTx = nil
+                        } label: {
+                            HStack {
+                                Text(cat).foregroundStyle(colors.onSurface)
+                                Spacer()
+                                if vm.fioCategory(for: tx) == cat {
+                                    Image(systemName: "checkmark").foregroundStyle(colors.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(String(localized: "Zařadit"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "Zavřít")) { categorizingTx = nil }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Příští výplata
@@ -372,22 +446,22 @@ struct CashflowCockpitView: View {
         .modifier(Card(colors: colors))
     }
 
-    private var investedCard: some View {
+    private var transferCard: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
-                Text(String(localized: "Odkládáš na investice")).font(AccBotFonts.titleSmall)
+                Text(String(localized: "Přesun mezi účty")).font(AccBotFonts.titleSmall)
                     .foregroundStyle(colors.onSurface)
                 Spacer()
-                Text(fmt(vm.investedTotalCzk)).font(AccBotFonts.headline).foregroundStyle(colors.primary)
+                Text(fmt(vm.internalTransferTotalCzk)).font(AccBotFonts.headline).foregroundStyle(colors.onSurfaceVariant)
             }
-            ForEach(vm.investedFlow) { o in
+            ForEach(vm.internalTransfers) { o in
                 HStack {
                     Text(o.name).font(AccBotFonts.body).foregroundStyle(colors.onSurfaceVariant)
                     Spacer()
                     Text(fmt(o.amountCzk)).font(AccBotFonts.body).foregroundStyle(colors.onSurfaceVariant)
                 }
             }
-            Text(String(localized: "Tohle se nepočítá jako útrata — je to odkládání z přebytku."))
+            Text(String(localized: "Jen přesun mezi tvými účty — financuje trvalé platby a splátky výš. Není to útrata ani investice, do výhledu se nepočítá."))
                 .font(AccBotFonts.captionSmall).foregroundStyle(colors.onSurfaceVariant)
         }
         .modifier(Card(colors: colors))

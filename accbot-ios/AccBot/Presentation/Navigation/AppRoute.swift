@@ -25,6 +25,7 @@ enum AppRoute: Hashable {
     case riskCockpit
     case loanManagement
     case cashflowCockpit
+    case portfolioChart
 }
 
 /// Bottom navigation tab items

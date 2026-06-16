@@ -9,6 +9,9 @@ struct NetWorthCard: View {
     var onTapRisk: () -> Void = {}
 
     @Environment(\.accBotColors) private var colors
+    @AppStorage("hideNetWorth") private var hideNetWorth = true
+
+    private func mask(_ s: String) -> String { hideNetWorth ? "••••••" : s }
 
     /// Podíl equity (zelená) z celkové hodnoty aktiv, 0...1. Zbytek = dluh (oranžová).
     private var equityFraction: Double {
@@ -66,13 +69,18 @@ struct NetWorthCard: View {
                     .background(ltvColor.opacity(0.15))
                     .clipShape(Capsule())
             }
+            Button { hideNetWorth.toggle() } label: {
+                Image(systemName: hideNetWorth ? "eye.slash" : "eye")
+                    .font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
+            }
+            .accessibilityLabel(String(localized: "Skrýt/zobrazit čisté jmění"))
         }
     }
 
     // MARK: - Net worth headline
 
     private var netWorthValue: some View {
-        Text(summary.netWorthCzk.map { AccBotFormatters.formatFiat($0, symbol: "CZK") } ?? "—")
+        Text(mask(summary.netWorthCzk.map { AccBotFormatters.formatFiat($0, symbol: "CZK") } ?? "—"))
             .font(AccBotFonts.titleLarge)
             .foregroundStyle(netWorthColor)
             .minimumScaleFactor(0.6)
@@ -123,7 +131,7 @@ struct NetWorthCard: View {
                 Text(String(localized: "Drženo"))
                     .font(AccBotFonts.caption)
                     .foregroundStyle(colors.onSurfaceVariant)
-                Text(AccBotFormatters.formatCrypto(summary.heldBtc, symbol: "BTC"))
+                Text(mask(AccBotFormatters.formatCrypto(summary.heldBtc, symbol: "BTC")))
                     .font(AccBotFonts.body)
                     .foregroundStyle(colors.onSurface)
             }
@@ -132,7 +140,7 @@ struct NetWorthCard: View {
                 Text(String(localized: "Hodnota"))
                     .font(AccBotFonts.caption)
                     .foregroundStyle(colors.onSurfaceVariant)
-                Text(summary.btcValueCzk.map { AccBotFormatters.formatFiat($0, symbol: "CZK") } ?? "—")
+                Text(mask(summary.btcValueCzk.map { AccBotFormatters.formatFiat($0, symbol: "CZK") } ?? "—"))
                     .font(AccBotFonts.body)
                     .foregroundStyle(colors.onSurface)
             }
@@ -197,7 +205,7 @@ struct NetWorthCard: View {
                 .font(AccBotFonts.body)
                 .foregroundStyle(colors.onSurface)
             Spacer()
-            Text(AccBotFormatters.formatFiat(amount, symbol: "CZK"))
+            Text(mask(AccBotFormatters.formatFiat(amount, symbol: "CZK")))
                 .font(AccBotFonts.body)
                 .foregroundStyle(colors.onSurface)
             if showChevron {

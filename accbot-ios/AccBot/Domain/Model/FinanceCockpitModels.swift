@@ -46,7 +46,9 @@ struct StandingOrders: Codable, Equatable {
         var note: String?
         var id: String { name }
 
-        /// Investice/převody se v kategoriích skrývají (odkládání z přebytku, ne výdaj).
-        var isInvestedFlow: Bool { category == "Investice" || category == "InternalTransfer" }
+        /// Přesun mezi vlastními účty (financuje trvalé platby) — ne výdaj ani investice.
+        var isInternalTransfer: Bool { category == "InternalTransfer" }
+        /// Skutečná investice (BTC apod.) — v tomhle přehledu se vůbec nezobrazuje (řeší portfolio).
+        var isHiddenInvestment: Bool { category == "Investice" }
     }
 }

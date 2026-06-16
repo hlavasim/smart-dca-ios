@@ -22,4 +22,17 @@ final class FinanceService {
         }
         return (baseline, orders)
     }
+
+    /// Fio kategorie transakcí z gitu (fio-overrides.json) — aby zůstaly i po reinstalu.
+    func loadFioOverrides() async -> [String: String] {
+        guard let (data, _) = await gitHub.fetch(path: "fio-overrides.json"),
+              let m = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return m
+    }
+
+    /// Uloží Fio kategorie do gitu (po každé změně).
+    func saveFioOverrides(_ overrides: [String: String]) async {
+        guard let data = try? JSONEncoder().encode(overrides) else { return }
+        _ = await gitHub.push(data, path: "fio-overrides.json", message: "fio: kategorie transakcí")
+    }
 }

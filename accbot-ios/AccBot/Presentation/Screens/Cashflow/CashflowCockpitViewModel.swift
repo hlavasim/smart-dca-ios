@@ -14,7 +14,7 @@ final class CashflowCockpitViewModel: ObservableObject {
     @Published var paydayDay = 27
     @Published var categories: [FinanceBaseline.Cat] = []
     @Published var standingVisible: [StandingOrders.Order] = []
-    @Published var investedFlow: [StandingOrders.Order] = []
+    @Published var internalTransfers: [StandingOrders.Order] = []
 
     // Fio + ruční útraty + projekce
     @Published var fioLoading = false
@@ -75,6 +75,10 @@ final class CashflowCockpitViewModel: ObservableObject {
         fioCategoryStore.set(category, for: tx.id)
         objectWillChange.send()
         recompute()
+        // Hned ulož do gitu, ať kategorie zůstanou i po reinstalu.
+        let overrides = fioCategoryStore.all()
+        let svc = financeService
+        Task { await svc.saveFioOverrides(overrides) }
     }
 
     func setNextPaycheck(_ czk: Int) {
@@ -82,9 +86,10 @@ final class CashflowCockpitViewModel: ObservableObject {
         defaults.set(czk, forKey: paycheckKey)
     }
 
-    /// Trvalé příkazy na Air Bank (vše krom Fio) → odečíst od hrubé výplaty = čistý zbytek.
+    /// Reálné trvalé platby (bills, daně, splátky) → odečíst od hrubé výplaty = čistý zbytek.
+    /// Přesun mezi vlastními účty se NEzapočítává — jen financuje tyhle platby (jinak dvojí počítání).
     var standingTotalCzk: Int {
-        (standingVisible + investedFlow).reduce(0) { $0 + $1.amountCzk }
+        standingVisible.reduce(0) { $0 + $1.amountCzk }
     }
     var paycheckRestCzk: Int { max(0, nextPaycheckCzk - standingTotalCzk) }
 
@@ -129,9 +134,13 @@ final class CashflowCockpitViewModel: ObservableObject {
         structuralBalanceCzk = incomeCzk - expensesCzk
         paydayDay = baseline.payday.dayOfMonth
         categories = baseline.categories.sorted { $0.monthlyMedianCzk > $1.monthlyMedianCzk }
-        standingVisible = orders.filter { !$0.isInvestedFlow }.sorted { $0.dayOfMonth < $1.dayOfMonth }
-        investedFlow = orders.filter { $0.isInvestedFlow }
+        standingVisible = orders.filter { !$0.isInternalTransfer && !$0.isHiddenInvestment }
+            .sorted { $0.dayOfMonth < $1.dayOfMonth }
+        internalTransfers = orders.filter { $0.isInternalTransfer }
         manualSpends = manualStore.since(lastPayday)
+        // Fio kategorie z gitu (aby přežily reinstall / byly napříč zařízeními)
+        let remote = await financeService.loadFioOverrides()
+        if !remote.isEmpty { fioCategoryStore.merge(remote) }
         errorMessage = nil
         loaded = true
         recompute()
@@ -233,7 +242,27 @@ final class CashflowCockpitViewModel: ObservableObject {
     private func dbl(_ d: Decimal) -> Double { NSDecimalNumber(decimal: d).doubleValue }
 
     var maxCategoryCzk: Int { categories.map(\.monthlyMedianCzk).max() ?? 1 }
-    var investedTotalCzk: Int { investedFlow.reduce(0) { $0 + $1.amountCzk } }
+    var internalTransferTotalCzk: Int { internalTransfers.reduce(0) { $0 + $1.amountCzk } }
+
+    // MARK: - Fio: viditelné vs skryté
+
+    /// Fio transakce, které se počítají (skryté „Skrýt" se v hlavním seznamu nezobrazují).
+    var visibleFioTransactions: [FioTransaction] {
+        fioTransactions.filter { fioCategory(for: $0) != FioCategoryStore.hidden }
+    }
+    var hiddenFioTransactions: [FioTransaction] {
+        fioTransactions.filter { fioCategory(for: $0) == FioCategoryStore.hidden }
+    }
+
+    /// Vrátí skrytou transakci zpět (smaže override) — i v gitu.
+    func unhideFio(_ tx: FioTransaction) {
+        fioCategoryStore.remove(txId: tx.id)
+        objectWillChange.send()
+        recompute()
+        let overrides = fioCategoryStore.all()
+        let svc = financeService
+        Task { await svc.saveFioOverrides(overrides) }
+    }
     /// Přebytek na výplatu = „ušetříš navíc" (nad už odloženými investicemi). Nil dokud není Fio.
     var willHaveSurplus: Bool { (projectedAtPayday ?? 0) >= 0 }
 }

@@ -96,8 +96,8 @@ final class AppRouter: ObservableObject {
             selectedTab = .notifications
             notificationsPath = NavigationPath()
         case "portfolio":
-            selectedTab = .portfolio
-            portfolioPath = NavigationPath()
+            selectedTab = .dashboard       // Portfolio tab = dashboard (graf přes route)
+            dashboardPath = NavigationPath()
         case "settings":
             selectedTab = .settings
             settingsPath = NavigationPath()

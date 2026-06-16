@@ -1,5 +1,11 @@
 import Foundation
 
+/// Výsledek ručního nákupu přes burzu (String error — Result vyžaduje Error, tady stačí hláška).
+enum ManualBuyOutcome {
+    case success(Decimal)
+    case failure(String)
+}
+
 /// Ruční nákup BTC: buď jen zaznamenat (koupeno mimo appku), nebo koupit teď přes burzu.
 /// Zapíše Transaction (pro portfolio) + HoldingRecord (pro čisté jmění/daně).
 final class ManualBuyUseCase {
@@ -24,7 +30,7 @@ final class ManualBuyUseCase {
     }
 
     /// Nákup mimo schedule přes burzu (custom částka). Vrátí koupené BTC nebo chybu.
-    func buyNow(czkAmount: Decimal, api: ExchangeApi) async -> Result<Decimal, String> {
+    func buyNow(czkAmount: Decimal, api: ExchangeApi) async -> ManualBuyOutcome {
         guard czkAmount > 0 else { return .failure("Zadej částku") }
         switch await api.marketBuy(crypto: "BTC", fiat: "CZK", fiatAmount: czkAmount) {
         case .success(let tx):

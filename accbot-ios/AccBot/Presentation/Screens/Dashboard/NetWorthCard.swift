@@ -39,8 +39,8 @@ struct NetWorthCard: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             header
             netWorthValue
-            if !hideNetWorth, let months = summary.runwayMonths {
-                runwayLine(months)
+            if !hideNetWorth, !runwayRows.isEmpty {
+                runwayBlock
             }
             if summary.btcValueCzk != nil {
                 equityBar
@@ -94,14 +94,48 @@ struct NetWorthCard: View {
 
     // MARK: - Runway „na nulu" (jak rychle dojde jmění při baseline deficitu)
 
-    private func runwayLine(_ months: Double) -> some View {
-        HStack(spacing: Spacing.sm) {
-            Image(systemName: "hourglass")
-                .font(AccBotFonts.caption).foregroundStyle(colors.warning).frame(width: 20)
-            Text(String(localized: "Při baseline vydrží ~\(yearsMonths(months)) (do \(targetMonth(months))) · deficit \(AccBotFormatters.formatFiat(Decimal(summary.monthlyDeficitCzk), symbol: "CZK"))/měs"))
-                .font(AccBotFonts.captionSmall)
-                .foregroundStyle(colors.onSurfaceVariant)
-            Spacer(minLength: 0)
+    private struct RunwayRow: Identifiable {
+        let label: String
+        let months: Double
+        let deficit: Int
+        var id: String { label }
+    }
+
+    /// Tři odhady, kolik vydrží jmění: baseline (medián), skutečnost posl. 3 měs, tento cyklus (živě).
+    private var runwayRows: [RunwayRow] {
+        var rows: [RunwayRow] = []
+        if let m = summary.runwayMonths(summary.monthlyDeficitCzk) {
+            rows.append(RunwayRow(label: String(localized: "baseline"), months: m, deficit: summary.monthlyDeficitCzk))
+        }
+        if let m = summary.runwayMonths(summary.recentDeficitCzk) {
+            rows.append(RunwayRow(label: String(localized: "posl. 3 měs"), months: m, deficit: summary.recentDeficitCzk))
+        }
+        if let m = summary.runwayMonths(summary.currentDeficitCzk) {
+            rows.append(RunwayRow(label: String(localized: "tento cyklus"), months: m, deficit: summary.currentDeficitCzk))
+        }
+        return rows
+    }
+
+    private var runwayBlock: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: "hourglass")
+                    .font(AccBotFonts.captionSmall).foregroundStyle(colors.warning)
+                Text(String(localized: "Jmění vydrží (runway na nulu)"))
+                    .font(AccBotFonts.captionSmall).foregroundStyle(colors.onSurfaceVariant)
+            }
+            ForEach(runwayRows) { r in
+                HStack(spacing: Spacing.sm) {
+                    Text(r.label)
+                        .font(AccBotFonts.captionSmall).foregroundStyle(colors.onSurfaceVariant)
+                        .frame(width: 84, alignment: .leading)
+                    Text(String(localized: "~\(yearsMonths(r.months)) · do \(targetMonth(r.months))"))
+                        .font(AccBotFonts.captionSmall).foregroundStyle(colors.onSurface)
+                    Spacer(minLength: Spacing.xs)
+                    Text(String(localized: "−\(AccBotFormatters.formatFiat(Decimal(r.deficit), symbol: "CZK"))/měs"))
+                        .font(AccBotFonts.captionSmall).foregroundStyle(colors.warning)
+                }
+            }
         }
     }
 

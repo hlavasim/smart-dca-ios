@@ -6,6 +6,8 @@ struct FinanceBaseline: Codable, Equatable {
     var version: Int
     var monthsCounted: Int
     var incomeMedianCzk: Int
+    /// Skutečný průměrný deficit (výdaje − příjem) za poslední 3 uzavřené měsíce. Volitelné (starší JSON ho nemá).
+    var recentCyclesAvgDeficitCzk: Int?
     var payday: Payday
     var categories: [Cat]
 

@@ -39,9 +39,15 @@ final class DashboardViewModel: ObservableObject {
     /// Měsíční baseline deficit (výdaje − příjem) z financí — pro „runway na nulu" na Dashboardu.
     /// UserDefaults, ať je k dispozici hned po startu (než dojede async load).
     private let deficitKey = "baselineMonthlyDeficit.v1"
+    private let recentDeficitKey = "baselineRecentDeficit.v1"
+    private let currentDeficitKey = "currentCycleDeficit.v1"   // zapisuje CashflowCockpitViewModel
     private var monthlyDeficitCzk: Int {
         get { UserDefaults.standard.integer(forKey: deficitKey) }
         set { UserDefaults.standard.set(newValue, forKey: deficitKey) }
+    }
+    private var recentDeficitCzk: Int {
+        get { UserDefaults.standard.integer(forKey: recentDeficitKey) }
+        set { UserDefaults.standard.set(newValue, forKey: recentDeficitKey) }
     }
 
     deinit {
@@ -103,17 +109,19 @@ final class DashboardViewModel: ObservableObject {
         let bankDebtCzk: Decimal
         let firefishLoanCount: Int
         let bankLoanCount: Int
-        /// Měsíční baseline deficit (výdaje − příjem), kladné = pálíš. 0 = neznámé/přebytek.
-        var monthlyDeficitCzk: Int = 0
+        /// Měsíční deficity (výdaje − příjem), kladné = pálíš. 0 = neznámé/přebytek.
+        var monthlyDeficitCzk: Int = 0      // baseline (medián)
+        var recentDeficitCzk: Int = 0       // skutečnost posl. 3 měsíce
+        var currentDeficitCzk: Int = 0      // tento cyklus (živě, extrapolováno)
 
         var totalDebtCzk: Decimal { firefishDebtCzk + bankDebtCzk }
         var netWorthCzk: Decimal? { btcValueCzk.map { $0 - totalDebtCzk } }
 
-        /// Za jak dlouho čisté jmění „dojde" při baseline deficitu (v měsících).
+        /// Za jak dlouho čisté jmění „dojde" při daném měsíčním deficitu (v měsících).
         /// Nil když deficit ≤ 0 (žiješ v plusu) nebo jmění ≤ 0.
-        var runwayMonths: Double? {
-            guard monthlyDeficitCzk > 0, let net = netWorthCzk, net > 0 else { return nil }
-            return Double(truncating: net as NSDecimalNumber) / Double(monthlyDeficitCzk)
+        func runwayMonths(_ deficitCzk: Int) -> Double? {
+            guard deficitCzk > 0, let net = netWorthCzk, net > 0 else { return nil }
+            return Double(truncating: net as NSDecimalNumber) / Double(deficitCzk)
         }
         /// Loan-to-value napříč celým portfoliem (dluh / hodnota aktiv) v %.
         var ltvPercent: Double? {
@@ -170,6 +178,7 @@ final class DashboardViewModel: ObservableObject {
         guard let (b, _) = await deps.financeService.load() else { return }
         let expenses = b.categories.reduce(0) { $0 + $1.monthlyMedianCzk }
         monthlyDeficitCzk = max(0, expenses - b.incomeMedianCzk)
+        recentDeficitCzk = max(0, b.recentCyclesAvgDeficitCzk ?? 0)
     }
 
     /// Spočítá čisté jmění: držené BTC × živá cena − (Firefish + bankovní dluhy).
@@ -199,7 +208,9 @@ final class DashboardViewModel: ObservableObject {
             bankDebtCzk: bankDebt,
             firefishLoanCount: ffLoans.count,
             bankLoanCount: bankLoans.count,
-            monthlyDeficitCzk: monthlyDeficitCzk
+            monthlyDeficitCzk: monthlyDeficitCzk,
+            recentDeficitCzk: recentDeficitCzk,
+            currentDeficitCzk: UserDefaults.standard.integer(forKey: currentDeficitKey)
         )
     }
 

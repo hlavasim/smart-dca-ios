@@ -258,6 +258,12 @@ final class CashflowCockpitViewModel: ObservableObject {
         }
         categoryLive = live.sorted { $0.spent > $1.spent }
 
+        // Tento cyklus → měsíční deficit (extrapolace útrat × příjem z baseline) pro „runway" na Dashboardu.
+        // Příjem držím na baseline mediánu (stabilní), aby variabilita byla jen v útratách tohoto cyklu.
+        let monthlyExpenses = dbl(spentThisCycle) / Double(elapsed) * Double(cycleDays)
+        let currentDeficit = Int(monthlyExpenses.rounded()) - incomeCzk
+        defaults.set(max(0, currentDeficit), forKey: "currentCycleDeficit.v1")
+
         // Projekce obálky
         guard let balance = fioBalance else {
             projectedAtPayday = nil; safeToSpendPerDay = nil; runwayDate = nil; runwayCoversPayday = false

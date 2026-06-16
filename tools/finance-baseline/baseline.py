@@ -106,6 +106,16 @@ def main(bt_path, cat_path, items_path, as_of):
         income_m[t["date"][:7]] += t["amountCzk"]
     income_median = _median0(list(income_m.values()))
 
+    # Skutečný deficit (výdaje − příjem) za poslední 3 uzavřené měsíce, průměr.
+    # Kladné = pálíš víc, než vyděláš. Pro „runway na nulu" dle reálu, ne jen mediánu.
+    month_exp = defaultdict(float)
+    for mm in cat_m.values():
+        for ym, v in mm.items():
+            month_exp[ym] += v
+    recent_months = sorted(months)[-3:]
+    recent_deficits = [month_exp.get(ym, 0.0) - income_m.get(ym, 0.0) for ym in recent_months]
+    recent_avg_deficit = round(sum(recent_deficits) / len(recent_deficits)) if recent_deficits else 0
+
     paydays = [int(t["date"][8:10]) for t in txs
                if "SOFTIM" in (t.get("counterparty") or "").upper()
                and t["amountCzk"] > 0 and t["date"][:4] == str(YEAR)]
@@ -118,6 +128,8 @@ def main(bt_path, cat_path, items_path, as_of):
         "monthsCounted": len(months),
         "scope": "all-except-investments",
         "incomeMedianCzk": income_median,
+        "recentCyclesAvgDeficitCzk": recent_avg_deficit,
+        "recentCyclesCount": len(recent_months),
         "payday": {"dayOfMonth": payday, "source": "avg(SOFTIM dates)"},
         "categories": categories_out,
     }

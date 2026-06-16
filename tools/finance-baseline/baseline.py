@@ -48,7 +48,7 @@ def main(bt_path, cat_path, items_path, as_of):
 
     cat_m = defaultdict(lambda: defaultdict(float))            # cat -> month -> sum
     merch_m = defaultdict(lambda: defaultdict(float))          # (cat, merchant) -> month -> sum
-    sub_m = defaultdict(lambda: defaultdict(float))            # (cat, sub, fromMerchant) -> month -> sum
+    sub_m = defaultdict(lambda: defaultdict(float))            # (cat, sub) -> month -> sum (napříč merchanty)
     months = set()
 
     for t in txs:
@@ -64,7 +64,7 @@ def main(bt_path, cat_path, items_path, as_of):
                 lc = li["category"]
                 cat_m[lc][ym] += amt
                 if li.get("subcategory"):
-                    sub_m[(lc, li["subcategory"], merchant)][ym] += amt
+                    sub_m[(lc, li["subcategory"])][ym] += amt
                 else:
                     merch_m[(lc, merchant)][ym] += amt
         else:
@@ -79,13 +79,12 @@ def main(bt_path, cat_path, items_path, as_of):
     all_names = set(cat_m) | {k[0] for k in merch_m} | {k[0] for k in sub_m}
     for name in sorted(all_names):
         merchants = [
-            {"name": m, "monthlyMedianCzk": med(mm),
-             "hasDetail": any(k[0] == name and k[2] == m for k in sub_m)}
+            {"name": m, "monthlyMedianCzk": med(mm)}
             for (cc, m), mm in merch_m.items() if cc == name
         ]
         subs = [
-            {"name": s, "monthlyMedianCzk": med(sm), "fromMerchant": fm}
-            for (cc, s, fm), sm in sub_m.items() if cc == name
+            {"name": s, "monthlyMedianCzk": med(sm)}
+            for (cc, s), sm in sub_m.items() if cc == name
         ]
         entry = {"name": name, "monthlyMedianCzk": med(cat_m.get(name, {}))}
         if merchants:

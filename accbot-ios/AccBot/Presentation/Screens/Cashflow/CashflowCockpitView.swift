@@ -317,7 +317,7 @@ struct CashflowCockpitView: View {
                     .font(AccBotFonts.body).foregroundStyle(colors.onSurface).lineLimit(1)
                 Text(vm.fioCategory(for: tx))
                     .font(AccBotFonts.caption)
-                    .foregroundStyle(vm.fioCategory(for: tx) == String(localized: "Nezařazeno") ? colors.warning : colors.primary)
+                    .foregroundStyle(catColor(for: tx))
             }
             Spacer()
             Text(fmtD(tx.amountCzk)).font(AccBotFonts.body)
@@ -327,6 +327,12 @@ struct CashflowCockpitView: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+    }
+
+    /// Barva štítku kategorie: příjem zeleně, „Nezařazeno" oranžově (nag), jinak primární.
+    private func catColor(for tx: FioTransaction) -> Color {
+        if tx.amountCzk >= 0 { return colors.success }
+        return vm.fioCategory(for: tx) == String(localized: "Nezařazeno") ? colors.warning : colors.primary
     }
 
     /// Sheet pro zařazení Fio transakce — otevře se hned (žádné 10s čekání jako u Menu).

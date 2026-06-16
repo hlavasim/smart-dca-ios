@@ -68,9 +68,11 @@ final class CashflowCockpitViewModel: ObservableObject {
         self.nextPaycheckCzk = defaults.integer(forKey: paycheckKey)
     }
 
-    /// Kategorie Fio transakce: override z úložiště, jinak "Nezařazeno".
+    /// Kategorie Fio transakce: override z úložiště; jinak u příchozí (kladné) "Příjem",
+    /// u odchozí "Nezařazeno". Příjem se stejně do útrat nepočítá (počítají se jen mínusy).
     func fioCategory(for tx: FioTransaction) -> String {
-        fioCategoryStore.category(for: tx.id) ?? String(localized: "Nezařazeno")
+        if let c = fioCategoryStore.category(for: tx.id) { return c }
+        return tx.amountCzk >= 0 ? String(localized: "Příjem") : String(localized: "Nezařazeno")
     }
 
     func setFioCategory(_ category: String, for tx: FioTransaction) {

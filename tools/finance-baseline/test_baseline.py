@@ -42,6 +42,18 @@ def test_median_per_category_excludes_partial_month_and_investments_and_transfer
     assert all(c["name"] not in ("Investice", "InternalTransfer") for c in out["categories"])
 
 
+def test_income_median_from_income_categories():
+    tx = [
+        {"id": "s1", "date": "2026-01-27T00:00:00", "amountCzk": 100000, "category": "Business", "counterparty": "SOFTIM"},
+        {"id": "s2", "date": "2026-02-27T00:00:00", "amountCzk": 120000, "category": "Business", "counterparty": "SOFTIM"},
+        {"id": "s3", "date": "2026-03-27T00:00:00", "amountCzk": 80000, "category": "Business", "counterparty": "SOFTIM"},
+        {"id": "now", "date": "2026-06-05T00:00:00", "amountCzk": 999999, "category": "Business", "counterparty": "SOFTIM"},
+        {"id": "p1", "date": "2026-01-10T00:00:00", "amountCzk": -500, "category": "Potraviny", "counterparty": "K"},
+    ]
+    out = _run(tx, CATS, {})
+    assert out["incomeMedianCzk"] == 100000  # median(100k,120k,80k), aktuální měsíc vynechán
+
+
 def test_tier1_merchant_and_payday():
     tx = [
         {"id": "a1", "date": "2026-01-10T00:00:00", "amountCzk": -1200, "category": "Potraviny", "counterparty": "KAUFLAND PRAHA"},

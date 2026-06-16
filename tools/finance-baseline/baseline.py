@@ -93,6 +93,19 @@ def main(bt_path, cat_path, items_path, as_of):
             entry["subcategories"] = sorted(subs, key=lambda x: -x["monthlyMedianCzk"])
         categories_out.append(entry)
 
+    # Příjem: median měsíčně z příjmových kategorií (type Income), bez částečného měsíce.
+    income_m = defaultdict(float)
+    for t in txs:
+        c = meta.get(t.get("category"))
+        if not c or c.get("type") != "Income" or c.get("excludeFromCashflow") or c.get("isPrivate"):
+            continue
+        if t["amountCzk"] <= 0 or t["date"][:4] != str(YEAR):
+            continue
+        if (int(t["date"][:4]), int(t["date"][5:7])) == cur_ym:
+            continue
+        income_m[t["date"][:7]] += t["amountCzk"]
+    income_median = _median0(list(income_m.values()))
+
     paydays = [int(t["date"][8:10]) for t in txs
                if "SOFTIM" in (t.get("counterparty") or "").upper()
                and t["amountCzk"] > 0 and t["date"][:4] == str(YEAR)]
@@ -104,6 +117,7 @@ def main(bt_path, cat_path, items_path, as_of):
         "sourceYear": YEAR,
         "monthsCounted": len(months),
         "scope": "all-except-investments",
+        "incomeMedianCzk": income_median,
         "payday": {"dayOfMonth": payday, "source": "avg(SOFTIM dates)"},
         "categories": categories_out,
     }

@@ -34,12 +34,13 @@ final class LoanManagementViewModel: ObservableObject {
     }
 
     func createFFLoan(externalId: String, amountCzk: Decimal, collateralBtc: Decimal,
-                      durationDays: Int, interestRate: Decimal, btcFeeRate: Decimal, btcPriceAtLoan: Decimal) {
+                      durationDays: Int, interestRate: Decimal, btcFeeRate: Decimal,
+                      btcPriceAtLoan: Decimal, loanDate: Date) {
         do {
             _ = try CreateFirefishLoanUseCase(db: db).create(
                 externalId: externalId, loanAmountCzk: amountCzk, collateralBtc: collateralBtc,
                 durationDays: durationDays, interestRate: interestRate, btcFeeRate: btcFeeRate,
-                btcPriceAtLoan: btcPriceAtLoan, loanDate: Date())
+                btcPriceAtLoan: btcPriceAtLoan, loanDate: loanDate)
             message = "Půjčka \(externalId) vytvořena"
             load()
         } catch { message = "Chyba: \(error.localizedDescription)" }

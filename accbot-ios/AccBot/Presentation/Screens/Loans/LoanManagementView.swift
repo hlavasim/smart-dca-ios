@@ -5,6 +5,7 @@ struct LoanManagementView: View {
     @StateObject private var vm: LoanManagementViewModel
     @State private var showCreate = false
     @State private var showSell = false
+    @State private var topUpTarget: TopUpTarget?
 
     init(deps: AppDependencies) {
         _vm = StateObject(wrappedValue: LoanManagementViewModel(deps: deps))
@@ -18,7 +19,7 @@ struct LoanManagementView: View {
                         Text(l.externalLoanId).font(.headline)
                         Text("Kolaterál \(l.collateralBtcAmount) BTC").font(.caption).foregroundStyle(.secondary)
                         HStack {
-                            Button("Top-up 0.01") { vm.topUp(l.externalLoanId, addBtc: 0.01) }
+                            Button("Top-up") { topUpTarget = TopUpTarget(id: l.externalLoanId) }
                             Spacer()
                             Button("Splatit", role: .destructive) { vm.repay(l.externalLoanId) }
                         }
@@ -50,6 +51,7 @@ struct LoanManagementView: View {
         .task { vm.load() }
         .sheet(isPresented: $showCreate) { CreateLoanForm(vm: vm) }
         .sheet(isPresented: $showSell) { SellBtcForm(vm: vm) }
+        .sheet(item: $topUpTarget) { t in TopUpForm(vm: vm, externalId: t.id) }
         .overlay(alignment: .bottom) {
             if let m = vm.message {
                 Text(m).font(.caption).padding(8).background(.thinMaterial, in: Capsule()).padding(.bottom, 8)
@@ -64,6 +66,7 @@ private struct CreateLoanForm: View {
     @State private var externalId = ""
     @State private var amount = ""
     @State private var collateral = ""
+    @State private var loanDate = Date()
     @State private var durationDays = "365"
     @State private var interestRate = "0.10"
     @State private var btcFeeRate = "0.015"
@@ -75,6 +78,7 @@ private struct CreateLoanForm: View {
                 TextField("External ID", text: $externalId)
                 TextField("Částka CZK", text: $amount).keyboardType(.decimalPad)
                 TextField("Kolaterál BTC", text: $collateral).keyboardType(.decimalPad)
+                DatePicker("Datum půjčky (od kdy)", selection: $loanDate, displayedComponents: .date)
                 TextField("Doba (dny)", text: $durationDays).keyboardType(.numberPad)
                 TextField("Úrok p.a. (0.10)", text: $interestRate).keyboardType(.decimalPad)
                 TextField("BTC fee p.a. (0.015)", text: $btcFeeRate).keyboardType(.decimalPad)
@@ -92,7 +96,8 @@ private struct CreateLoanForm: View {
                             durationDays: Int(durationDays) ?? 365,
                             interestRate: Decimal(string: dec(interestRate)) ?? 0,
                             btcFeeRate: Decimal(string: dec(btcFeeRate)) ?? 0,
-                            btcPriceAtLoan: Decimal(string: dec(btcPrice)) ?? 0)
+                            btcPriceAtLoan: Decimal(string: dec(btcPrice)) ?? 0,
+                            loanDate: loanDate)
                         dismiss()
                     }
                     .disabled(externalId.isEmpty || amount.isEmpty || collateral.isEmpty || btcPrice.isEmpty)
@@ -101,6 +106,39 @@ private struct CreateLoanForm: View {
         }
     }
     private func dec(_ s: String) -> String { s.replacingOccurrences(of: ",", with: ".") }
+}
+
+private struct TopUpTarget: Identifiable { let id: String }
+
+private struct TopUpForm: View {
+    @ObservedObject var vm: LoanManagementViewModel
+    let externalId: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var amount = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Text("Půjčka \(externalId)").font(.caption).foregroundStyle(.secondary)
+                TextField("Kolik BTC přidat ke kolaterálu", text: $amount).keyboardType(.decimalPad)
+                Text("Zadej přesné množství (LIFO alokace z volných BTC).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .navigationTitle("Top-up kolaterálu")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Přidat") {
+                        let amt = Double(amount.replacingOccurrences(of: ",", with: ".")) ?? 0
+                        if amt > 0 { vm.topUp(externalId, addBtc: amt) }
+                        dismiss()
+                    }
+                    .disabled(amount.isEmpty)
+                }
+            }
+        }
+    }
 }
 
 private struct SellBtcForm: View {

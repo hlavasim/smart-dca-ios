@@ -50,57 +50,8 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 20)
-                        .onChanged { value in
-                            let h = value.translation.width
-                            let v = value.translation.height
-
-                            // Lock direction on first significant movement
-                            if isDraggingHorizontally == nil && (abs(h) > 10 || abs(v) > 10) {
-                                isDraggingHorizontally = abs(h) > abs(v) * 1.5
-                            }
-                            guard isDraggingHorizontally == true else { return }
-
-                            let i = router.selectedTab.rawValue
-                            // Rubber-band at edges (first/last tab)
-                            if (i == 0 && h > 0) || (i == TabItem.allCases.count - 1 && h < 0) {
-                                dragOffset = h * 0.3
-                            } else {
-                                dragOffset = h
-                            }
-                        }
-                        .onEnded { value in
-                            let wasHorizontal = isDraggingHorizontally == true
-                            isDraggingHorizontally = nil
-
-                            guard wasHorizontal else { return }
-
-                            let h = value.translation.width
-                            let velocity = value.predictedEndTranslation.width
-                            let threshold = screenWidth * 0.25
-                            let current = router.selectedTab.rawValue
-                            var target = current
-
-                            if h < -threshold || velocity < -screenWidth * 0.5 {
-                                target = min(current + 1, TabItem.allCases.count - 1)
-                            } else if h > threshold || velocity > screenWidth * 0.5 {
-                                target = max(current - 1, 0)
-                            }
-
-                            if let newTab = TabItem(rawValue: target), newTab != router.selectedTab {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
-                                    router.selectedTab = newTab
-                                    dragOffset = 0
-                                }
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            } else {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
-                                    dragOffset = 0
-                                }
-                            }
-                        }
-                )
+                // Swipe-mezi-taby gesture ODSTRANĚN — soupeřil se scrollem uvnitř tabů
+                // a způsoboval sekání (~15fps). Taby se přepínají přes CustomTabBar tlačítka.
             }
 
             CustomTabBar(

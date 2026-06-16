@@ -39,6 +39,9 @@ struct NetWorthCard: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             header
             netWorthValue
+            if !hideNetWorth, let months = summary.runwayMonths {
+                runwayLine(months)
+            }
             if summary.btcValueCzk != nil {
                 equityBar
             }
@@ -87,6 +90,35 @@ struct NetWorthCard: View {
             .lineLimit(1)
             .accessibilityLabel(String(localized: "Čisté jmění"))
             .accessibilityValue(summary.netWorthCzk.map { AccBotFormatters.formatFiat($0, symbol: "CZK") } ?? String(localized: "Neznámé"))
+    }
+
+    // MARK: - Runway „na nulu" (jak rychle dojde jmění při baseline deficitu)
+
+    private func runwayLine(_ months: Double) -> some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "hourglass")
+                .font(AccBotFonts.caption).foregroundStyle(colors.warning).frame(width: 20)
+            Text(String(localized: "Při baseline vydrží ~\(yearsMonths(months)) (do \(targetMonth(months))) · deficit \(AccBotFormatters.formatFiat(Decimal(summary.monthlyDeficitCzk), symbol: "CZK"))/měs"))
+                .font(AccBotFonts.captionSmall)
+                .foregroundStyle(colors.onSurfaceVariant)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func yearsMonths(_ months: Double) -> String {
+        let m = max(0, Int(months.rounded()))
+        let y = m / 12, mm = m % 12
+        if y > 0 && mm > 0 { return "\(y) r \(mm) m" }
+        if y > 0 { return "\(y) r" }
+        return "\(mm) m"
+    }
+
+    private static let myFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MM/yyyy"; f.locale = Locale(identifier: "cs_CZ"); return f
+    }()
+    private func targetMonth(_ months: Double) -> String {
+        let d = Calendar.current.date(byAdding: .month, value: max(0, Int(months.rounded())), to: Date()) ?? Date()
+        return Self.myFmt.string(from: d)
     }
 
     // MARK: - Equity vs. debt bar

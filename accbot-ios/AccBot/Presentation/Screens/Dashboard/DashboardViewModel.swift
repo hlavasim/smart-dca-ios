@@ -36,6 +36,14 @@ final class DashboardViewModel: ObservableObject {
         return d
     }
 
+    /// Měsíční baseline deficit (výdaje − příjem) z financí — pro „runway na nulu" na Dashboardu.
+    /// UserDefaults, ať je k dispozici hned po startu (než dojede async load).
+    private let deficitKey = "baselineMonthlyDeficit.v1"
+    private var monthlyDeficitCzk: Int {
+        get { UserDefaults.standard.integer(forKey: deficitKey) }
+        set { UserDefaults.standard.set(newValue, forKey: deficitKey) }
+    }
+
     deinit {
         loadTask?.cancel()
         balanceTask?.cancel()
@@ -95,9 +103,18 @@ final class DashboardViewModel: ObservableObject {
         let bankDebtCzk: Decimal
         let firefishLoanCount: Int
         let bankLoanCount: Int
+        /// Měsíční baseline deficit (výdaje − příjem), kladné = pálíš. 0 = neznámé/přebytek.
+        var monthlyDeficitCzk: Int = 0
 
         var totalDebtCzk: Decimal { firefishDebtCzk + bankDebtCzk }
         var netWorthCzk: Decimal? { btcValueCzk.map { $0 - totalDebtCzk } }
+
+        /// Za jak dlouho čisté jmění „dojde" při baseline deficitu (v měsících).
+        /// Nil když deficit ≤ 0 (žiješ v plusu) nebo jmění ≤ 0.
+        var runwayMonths: Double? {
+            guard monthlyDeficitCzk > 0, let net = netWorthCzk, net > 0 else { return nil }
+            return Double(truncating: net as NSDecimalNumber) / Double(monthlyDeficitCzk)
+        }
         /// Loan-to-value napříč celým portfoliem (dluh / hodnota aktiv) v %.
         var ltvPercent: Double? {
             guard let v = btcValueCzk, v > 0 else { return nil }
@@ -138,12 +155,21 @@ final class DashboardViewModel: ObservableObject {
     func loadDataAsync() async {
         await loadPlans()
         await loadHoldings()
+        await loadBaselineDeficit()
         await loadNetWorth()
         announceForVoiceOver(String(localized: "Dashboard loaded"))
         await fetchBalancesForPlans()
         if showMarketPulse {
             await fetchMarketData()
         }
+    }
+
+    /// Načte baseline (příjem/výdaje) a uloží měsíční deficit pro „runway na nulu".
+    /// Defenzivně: když data nejsou, deficit zůstane co byl (0 = runway se nezobrazí).
+    func loadBaselineDeficit() async {
+        guard let (b, _) = await deps.financeService.load() else { return }
+        let expenses = b.categories.reduce(0) { $0 + $1.monthlyMedianCzk }
+        monthlyDeficitCzk = max(0, expenses - b.incomeMedianCzk)
     }
 
     /// Spočítá čisté jmění: držené BTC × živá cena − (Firefish + bankovní dluhy).
@@ -172,7 +198,8 @@ final class DashboardViewModel: ObservableObject {
             firefishDebtCzk: ffDebt,
             bankDebtCzk: bankDebt,
             firefishLoanCount: ffLoans.count,
-            bankLoanCount: bankLoans.count
+            bankLoanCount: bankLoans.count,
+            monthlyDeficitCzk: monthlyDeficitCzk
         )
     }
 

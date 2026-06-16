@@ -19,6 +19,7 @@ struct CashflowCockpitView: View {
                     infoCard(err, system: "exclamationmark.triangle")
                 } else {
                     balanceCard
+                    fioCard
                     categoriesCard
                     if !vm.standingVisible.isEmpty { standingCard }
                     if !vm.investedFlow.isEmpty { investedCard }
@@ -68,6 +69,52 @@ struct CashflowCockpitView: View {
             Text(label).font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
             Text(fmt(value)).font(AccBotFonts.headline).foregroundStyle(color)
         }
+    }
+
+    // MARK: - Fio (živé útraty)
+
+    private var fioCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack {
+                Text(String(localized: "Fio účet (živě)"))
+                    .font(AccBotFonts.titleSmall).foregroundStyle(colors.onSurface)
+                Spacer()
+                Button {
+                    Task { await vm.refreshFio() }
+                } label: {
+                    if vm.fioLoading {
+                        ProgressView().frame(width: 18, height: 18)
+                    } else {
+                        Label(String(localized: "Refresh z Fio"), systemImage: "arrow.clockwise")
+                            .font(AccBotFonts.label).foregroundStyle(colors.primary)
+                    }
+                }
+                .disabled(vm.fioLoading)
+            }
+            if let s = vm.fioSummary {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text(String(localized: "Zůstatek")).font(AccBotFonts.caption)
+                            .foregroundStyle(colors.onSurfaceVariant)
+                        Text(fmtD(s.balanceCzk)).font(AccBotFonts.headline).foregroundStyle(colors.primary)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: Spacing.xs) {
+                        Text(String(localized: "Utraceno tento měsíc")).font(AccBotFonts.caption)
+                            .foregroundStyle(colors.onSurfaceVariant)
+                        Text(fmtD(s.spentThisMonthCzk)).font(AccBotFonts.headline).foregroundStyle(colors.onSurface)
+                    }
+                }
+                Text(String(localized: "Příjem tento měsíc \(fmtD(s.incomeThisMonthCzk)) · \(s.txCount) transakcí"))
+                    .font(AccBotFonts.captionSmall).foregroundStyle(colors.onSurfaceVariant)
+            } else if let e = vm.fioError {
+                Text(e).font(AccBotFonts.caption).foregroundStyle(colors.error)
+            } else {
+                Text(String(localized: "Klepni na Refresh pro živý zůstatek a útratu z Fio."))
+                    .font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
+            }
+        }
+        .modifier(Card(colors: colors))
     }
 
     // MARK: - Categories
@@ -163,6 +210,10 @@ struct CashflowCockpitView: View {
 
     private func fmt(_ v: Int) -> String {
         AccBotFormatters.formatFiat(Decimal(v), symbol: "CZK")
+    }
+
+    private func fmtD(_ v: Decimal) -> String {
+        AccBotFormatters.formatFiat(v, symbol: "CZK")
     }
 
     private func signed(_ v: Int) -> String {

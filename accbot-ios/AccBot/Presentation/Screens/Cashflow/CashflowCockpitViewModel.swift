@@ -52,6 +52,7 @@ final class CashflowCockpitViewModel: ObservableObject {
     private let fioService: FioService
     private let manualStore: ManualSpendStore
     private let fioCategoryStore: FioCategoryStore
+    private var fioRules: [FioRules.Rule] = []
     private let defaults = UserDefaults.standard
     private let paycheckKey = "nextPaycheckCzk.v1"
     private let fioCacheKey = "fioSnapshot.v1"
@@ -68,11 +69,21 @@ final class CashflowCockpitViewModel: ObservableObject {
         self.nextPaycheckCzk = defaults.integer(forKey: paycheckKey)
     }
 
-    /// Kategorie Fio transakce: override z úložiště; jinak u příchozí (kladné) "Příjem",
-    /// u odchozí "Nezařazeno". Příjem se stejně do útrat nepočítá (počítají se jen mínusy).
+    /// Kategorie Fio transakce: 1) ruční override (přednost), 2) auto-pravidlo (merchant),
+    /// 3) fallback příchozí="Příjem" / odchozí="Nezařazeno". Příjem se do útrat nepočítá.
     func fioCategory(for tx: FioTransaction) -> String {
         if let c = fioCategoryStore.category(for: tx.id) { return c }
+        if let r = ruleCategory(for: tx) { return r }
         return tx.amountCzk >= 0 ? String(localized: "Příjem") : String(localized: "Nezařazeno")
+    }
+
+    /// Auto-kategorie podle pravidel z gitu (podřetězec v protistraně+zprávě, první shoda).
+    private func ruleCategory(for tx: FioTransaction) -> String? {
+        let hay = (tx.counterparty + " " + tx.note).lowercased()
+        for r in fioRules where !r.match.isEmpty && hay.contains(r.match.lowercased()) {
+            return r.category
+        }
+        return nil
     }
 
     func setFioCategory(_ category: String, for tx: FioTransaction) {
@@ -158,6 +169,8 @@ final class CashflowCockpitViewModel: ObservableObject {
         // Fio kategorie z gitu (aby přežily reinstall / byly napříč zařízeními)
         let remote = await financeService.loadFioOverrides()
         if !remote.isEmpty { fioCategoryStore.merge(remote) }
+        // Pravidla auto-kategorizace Fio (merchant → kategorie)
+        fioRules = await financeService.loadFioRules()
         // Ruční vstupy kokpitu z gitu (výplata + ruční útraty) — přežijí reinstall
         let remoteState = await financeService.loadCockpitState()
         if let s = remoteState {

@@ -48,4 +48,11 @@ final class FinanceService {
         guard let data = try? JSONEncoder().encode(state) else { return }
         _ = await gitHub.push(data, path: "cockpit-state.json", message: "kokpit: výplata + ruční útraty")
     }
+
+    /// Pravidla auto-kategorizace Fio z gitu (fio-rules.json). Prázdné, když chybí.
+    func loadFioRules() async -> [FioRules.Rule] {
+        guard let (data, _) = await gitHub.fetch(path: "fio-rules.json"),
+              let r = try? JSONDecoder().decode(FioRules.self, from: data) else { return [] }
+        return r.rules
+    }
 }

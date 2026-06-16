@@ -31,6 +31,17 @@ struct FinanceBaseline: Codable, Equatable {
     }
 }
 
+/// Pravidla auto-kategorizace Fio transakcí (git: fio-rules.json). match = podřetězec
+/// (lowercase) v protistraně+zprávě, první shoda vyhrává. category "Skrýt" = nepočítat.
+struct FioRules: Codable, Equatable {
+    var version: Int
+    var rules: [Rule]
+    struct Rule: Codable, Equatable {
+        var match: String
+        var category: String
+    }
+}
+
 /// Ruční vstupy kokpitu, co přežijí reinstall (git: cockpit-state.json): výplata + ruční útraty.
 struct CockpitState: Codable, Equatable {
     var nextPaycheckCzk: Int

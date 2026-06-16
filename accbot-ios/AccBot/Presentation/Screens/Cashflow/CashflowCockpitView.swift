@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 /// Cashflow kokpit — hero je VÝHLED do výplaty (vyjdeš/zbyde, runway, safe-to-spend), ne strašení.
 /// Fio (živě) + ruční útraty proti baseline.
@@ -10,6 +11,7 @@ struct CashflowCockpitView: View {
     @State private var amountText = ""
     @State private var selectedCategory = ""
     @State private var noteText = ""
+    @State private var paycheckText = ""
 
     init(deps: AppDependencies) {
         _vm = StateObject(wrappedValue: CashflowCockpitViewModel(deps: deps))
@@ -24,8 +26,12 @@ struct CashflowCockpitView: View {
                     infoCard(err, system: "exclamationmark.triangle")
                 } else {
                     outlookCard
+                    runwayChartCard
                     fioCard
+                    if !vm.categoryLive.isEmpty { perCategoryCard }
+                    if !vm.fioTransactions.isEmpty { fioTransactionsCard }
                     manualCard
+                    paycheckCard
                     categoriesCard
                     if !vm.standingVisible.isEmpty { standingCard }
                     if !vm.investedFlow.isEmpty { investedCard }
@@ -199,6 +205,118 @@ struct CashflowCockpitView: View {
 
     private func resetSheet() {
         showAddSpend = false; amountText = ""; noteText = ""
+    }
+
+    // MARK: - Graf runway
+
+    private var runwayChartCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(String(localized: "Jak peníze padají do výplaty")).font(AccBotFonts.titleSmall)
+                .foregroundStyle(colors.onSurface)
+            if let bal = vm.fioBalance, let proj = vm.projectedAtPayday, vm.daysUntilPayday > 0 {
+                Chart {
+                    ForEach(chartPoints(bal: bal, proj: proj, days: vm.daysUntilPayday), id: \.day) { p in
+                        LineMark(x: .value("Den", p.day), y: .value("Kč", p.value))
+                            .foregroundStyle(colors.primary)
+                        AreaMark(x: .value("Den", p.day), y: .value("Kč", p.value))
+                            .foregroundStyle(colors.primary.opacity(0.12))
+                    }
+                    RuleMark(y: .value("Nula", 0))
+                        .foregroundStyle(colors.error.opacity(0.5))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
+                }
+                .frame(height: 140)
+            } else {
+                Text(String(localized: "Po Refreshi z Fio se ukáže křivka zůstatku do výplaty."))
+                    .font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
+            }
+        }
+        .modifier(Card(colors: colors))
+    }
+
+    private func chartPoints(bal: Decimal, proj: Decimal, days: Int) -> [(day: Int, value: Double)] {
+        let b = NSDecimalNumber(decimal: bal).doubleValue
+        let p = NSDecimalNumber(decimal: proj).doubleValue
+        return (0...max(1, days)).map { d in (d, b + (p - b) * Double(d) / Double(max(1, days))) }
+    }
+
+    // MARK: - Per-kategorie live
+
+    private var perCategoryCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(String(localized: "Tento cyklus po kategoriích")).font(AccBotFonts.titleSmall)
+                .foregroundStyle(colors.onSurface)
+            ForEach(vm.categoryLive) { c in
+                let ok = c.overUnder >= 0
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(c.name).font(AccBotFonts.body).foregroundStyle(colors.onSurface)
+                        Spacer()
+                        Text((ok ? "+" : "−") + fmtD(abs(c.overUnder)))
+                            .font(AccBotFonts.caption).foregroundStyle(ok ? colors.success : colors.error)
+                    }
+                    Text(String(localized: "teď \(fmtD(c.spent)) · projekce \(fmtD(c.projected)) · baseline \(fmt(c.baseline))"))
+                        .font(AccBotFonts.captionSmall).foregroundStyle(colors.onSurfaceVariant)
+                }
+                .padding(.vertical, 1)
+            }
+        }
+        .modifier(Card(colors: colors))
+    }
+
+    // MARK: - Fio transakce (kategorizace)
+
+    private var fioTransactionsCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(String(localized: "Fio transakce (klepni na kategorii)")).font(AccBotFonts.titleSmall)
+                .foregroundStyle(colors.onSurface)
+            ForEach(vm.fioTransactions) { tx in
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(tx.counterparty.isEmpty ? "—" : tx.counterparty)
+                            .font(AccBotFonts.body).foregroundStyle(colors.onSurface).lineLimit(1)
+                        Menu {
+                            Button(String(localized: "Skrýt (nepočítat)")) {
+                                vm.setFioCategory(FioCategoryStore.hidden, for: tx)
+                            }
+                            ForEach(categoryOptions, id: \.self) { cat in
+                                Button(cat) { vm.setFioCategory(cat, for: tx) }
+                            }
+                        } label: {
+                            Text(vm.fioCategory(for: tx)).font(AccBotFonts.caption).foregroundStyle(colors.primary)
+                        }
+                    }
+                    Spacer()
+                    Text(fmtD(tx.amountCzk)).font(AccBotFonts.body)
+                        .foregroundStyle(tx.amountCzk < 0 ? colors.onSurface : colors.success)
+                }
+                .padding(.vertical, 1)
+            }
+        }
+        .modifier(Card(colors: colors))
+    }
+
+    // MARK: - Příští výplata
+
+    private var paycheckCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(String(localized: "Příští výplata")).font(AccBotFonts.titleSmall)
+                .foregroundStyle(colors.onSurface)
+            HStack {
+                TextField(String(localized: "Hrubá výplata (Kč)"), text: $paycheckText)
+                    .keyboardType(.numberPad)
+                Button(String(localized: "Uložit")) {
+                    vm.setNextPaycheck(Int(paycheckText.filter(\.isNumber)) ?? 0)
+                }
+                .buttonStyle(.bordered)
+            }
+            if vm.nextPaycheckCzk > 0 {
+                Text(String(localized: "Čistý zbytek do Fia ≈ \(fmt(vm.paycheckRestCzk)) (výplata \(fmt(vm.nextPaycheckCzk)) − trvalé \(fmt(vm.standingTotalCzk)))"))
+                    .font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
+            }
+        }
+        .modifier(Card(colors: colors))
+        .onAppear { if paycheckText.isEmpty && vm.nextPaycheckCzk > 0 { paycheckText = "\(vm.nextPaycheckCzk)" } }
     }
 
     // MARK: - Kam jdou peníze (kontext)

@@ -22,6 +22,22 @@ final class CashflowCockpitViewModel: ObservableObject {
     @Published var fioBalance: Decimal?          // nil = ještě nerefreshováno
     @Published var fioSpentCycle: Decimal = 0
     @Published var manualSpends: [ManualSpend] = []
+    @Published var fioTransactions: [FioTransaction] = []
+
+    // Per-kategorie live (současná útrata vs prorated baseline vs projekce)
+    struct CategoryLive: Identifiable {
+        let id: String
+        let name: String
+        let spent: Decimal
+        let baseline: Int
+        let prorated: Decimal     // baseline × část cyklu, co uplynula
+        let projected: Decimal    // tempo → konec cyklu
+        var overUnder: Decimal { prorated - spent }   // kladné = jdeš pod plán (šetříš)
+    }
+    @Published var categoryLive: [CategoryLive] = []
+
+    // Příští výplata (čistý zbytek = výplata − trvalé příkazy na Air Bank)
+    @Published var nextPaycheckCzk: Int = 0
 
     // Spočtený výhled
     @Published var daysUntilPayday = 0
@@ -34,16 +50,43 @@ final class CashflowCockpitViewModel: ObservableObject {
     private let financeService: FinanceService
     private let fioService: FioService
     private let manualStore: ManualSpendStore
+    private let fioCategoryStore: FioCategoryStore
+    private let defaults = UserDefaults.standard
+    private let paycheckKey = "nextPaycheckCzk.v1"
     private let cal: Calendar
 
     init(deps: AppDependencies) {
         self.financeService = deps.financeService
         self.fioService = deps.fioService
         self.manualStore = deps.manualSpendStore
+        self.fioCategoryStore = deps.fioCategoryStore
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "Europe/Prague") ?? .current
         self.cal = c
+        self.nextPaycheckCzk = defaults.integer(forKey: paycheckKey)
     }
+
+    /// Kategorie Fio transakce: override z úložiště, jinak "Nezařazeno".
+    func fioCategory(for tx: FioTransaction) -> String {
+        fioCategoryStore.category(for: tx.id) ?? String(localized: "Nezařazeno")
+    }
+
+    func setFioCategory(_ category: String, for tx: FioTransaction) {
+        fioCategoryStore.set(category, for: tx.id)
+        objectWillChange.send()
+        recompute()
+    }
+
+    func setNextPaycheck(_ czk: Int) {
+        nextPaycheckCzk = czk
+        defaults.set(czk, forKey: paycheckKey)
+    }
+
+    /// Trvalé příkazy na Air Bank (vše krom Fio) → odečíst od hrubé výplaty = čistý zbytek.
+    var standingTotalCzk: Int {
+        (standingVisible + investedFlow).reduce(0) { $0 + $1.amountCzk }
+    }
+    var paycheckRestCzk: Int { max(0, nextPaycheckCzk - standingTotalCzk) }
 
     // MARK: - Cyklus (od poslední výplaty po příští)
 
@@ -102,7 +145,7 @@ final class CashflowCockpitViewModel: ObservableObject {
         switch await fioService.fetch(from: lastPayday, to: Date()) {
         case .success(let s):
             fioBalance = s.balanceCzk
-            fioSpentCycle = s.spentThisMonthCzk
+            fioTransactions = s.transactions
             fioError = nil
             recompute()
         case .failure(let err):
@@ -139,28 +182,50 @@ final class CashflowCockpitViewModel: ObservableObject {
 
     private func recompute() {
         daysUntilPayday = max(0, days(today, nextPayday))
+        let cycleDays = max(1, days(lastPayday, nextPayday))
+        let elapsed = max(1, days(lastPayday, today))
+        let hidden = FioCategoryStore.hidden
+
+        // Fio útrata OČIŠTĚNÁ — vyloučí skryté (FF průtok, převody, investice)
+        fioSpentCycle = fioTransactions.reduce(Decimal(0)) { acc, tx in
+            (tx.amountCzk < 0 && fioCategory(for: tx) != hidden) ? acc + (-tx.amountCzk) : acc
+        }
         spentThisCycle = fioSpentCycle + manualSpentCycle
 
+        // Per-kategorie: Fio (ne skryté) + ruční
+        var byCat: [String: Decimal] = [:]
+        for tx in fioTransactions where tx.amountCzk < 0 {
+            let c = fioCategory(for: tx)
+            if c != hidden { byCat[c, default: 0] += -tx.amountCzk }
+        }
+        for m in manualSpends { byCat[m.category, default: 0] += m.amountCzk }
+        let baseMap = Dictionary(categories.map { ($0.name, $0.monthlyMedianCzk) }, uniquingKeysWith: { a, _ in a })
+        var live: [CategoryLive] = []
+        for name in Set(byCat.keys).union(baseMap.keys) {
+            let spent = byCat[name] ?? 0
+            let baseline = baseMap[name] ?? 0
+            guard spent > 0 || baseline > 0 else { continue }
+            let prorated = Decimal(baseline) * Decimal(elapsed) / Decimal(cycleDays)
+            let projected = spent * Decimal(cycleDays) / Decimal(elapsed)
+            live.append(CategoryLive(id: name, name: name, spent: spent, baseline: baseline,
+                                     prorated: prorated, projected: projected))
+        }
+        categoryLive = live.sorted { $0.spent > $1.spent }
+
+        // Projekce obálky
         guard let balance = fioBalance else {
-            projectedAtPayday = nil
-            safeToSpendPerDay = nil
-            runwayDate = nil
-            runwayCoversPayday = false
+            projectedAtPayday = nil; safeToSpendPerDay = nil; runwayDate = nil; runwayCoversPayday = false
             return
         }
-        let elapsed = max(1, days(lastPayday, today))
-        let dvojToday = dbl(spentThisCycle) / Double(elapsed)              // denní tempo
-        let projectedRemaining = dvojToday * Double(daysUntilPayday)
-        projectedAtPayday = balance - Decimal(projectedRemaining)
+        let dailyBurn = dbl(spentThisCycle) / Double(elapsed)
+        projectedAtPayday = balance - Decimal(dailyBurn * Double(daysUntilPayday))
         safeToSpendPerDay = daysUntilPayday > 0 ? balance / Decimal(daysUntilPayday) : balance
-
-        if dvojToday > 0.5 {
-            let runwayDays = dbl(balance) / dvojToday
-            let rd = cal.date(byAdding: .day, value: Int(runwayDays.rounded()), to: today)
+        if dailyBurn > 0.5 {
+            let rd = cal.date(byAdding: .day, value: Int((dbl(balance) / dailyBurn).rounded()), to: today)
             runwayDate = rd
             runwayCoversPayday = (rd ?? today) >= nextPayday
         } else {
-            runwayDate = nil                 // ještě nic neutraceno → tempo neznámé
+            runwayDate = nil
             runwayCoversPayday = true
         }
     }

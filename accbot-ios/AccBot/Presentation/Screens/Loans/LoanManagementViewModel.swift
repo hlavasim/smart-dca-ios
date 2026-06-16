@@ -22,6 +22,7 @@ final class LoanManagementViewModel: ObservableObject {
             try RepayFirefishLoanUseCase(db: db).repay(externalId: externalId)
             message = "Splaceno \(externalId)"
             load()
+            backupToGit("FF splacení \(externalId)")
         } catch { message = "Chyba: \(error.localizedDescription)" }
     }
 
@@ -30,7 +31,21 @@ final class LoanManagementViewModel: ObservableObject {
             try TopUpCollateralUseCase(db: db).topUp(externalId: externalId, addBtc: addBtc)
             message = "Top-up \(externalId): +\(addBtc) BTC"
             load()
+            backupToGit("FF top-up \(externalId) +\(addBtc) BTC")
         } catch { message = "Chyba: \(error.localizedDescription)" }
+    }
+
+    /// Po změně půjčky hned pushni snapshot do gitu (jinak se data nesesynchronizují).
+    private func backupToGit(_ reason: String) {
+        let db = self.db
+        let snapshotService = deps.snapshotService
+        let gitHub = deps.gitHubBackupService
+        Task.detached {
+            guard let snap = try? snapshotService.build(from: db, fiat: "CZK"),
+                  !(snap.holdings.isEmpty && snap.firefishLoans.isEmpty && snap.bankLoans.isEmpty),
+                  let data = try? JSONEncoder().encode(snap) else { return }
+            _ = await gitHub.push(data, message: "snapshot: \(reason)")
+        }
     }
 
     func createFFLoan(externalId: String, amountCzk: Decimal, collateralBtc: Decimal,
@@ -43,6 +58,7 @@ final class LoanManagementViewModel: ObservableObject {
                 btcPriceAtLoan: btcPriceAtLoan, loanDate: loanDate)
             message = "Půjčka \(externalId) vytvořena"
             load()
+            backupToGit("FF nová půjčka \(externalId)")
         } catch { message = "Chyba: \(error.localizedDescription)" }
     }
 

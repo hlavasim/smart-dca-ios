@@ -20,14 +20,20 @@ struct RiskCockpitView: View {
                     }
                 }
             }
-            Section("Půjčky (LTV)") {
+            Section("Půjčky — LTV a likvidační cena (per půjčka)") {
                 ForEach(vm.loanRisks, id: \.externalLoanId) { lr in
-                    HStack {
-                        Text(lr.externalLoanId)
-                        Spacer()
-                        Text(String(format: "%.0f %%", lr.ltv * 100)).foregroundStyle(color(lr.level))
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(lr.externalLoanId)
+                            Spacer()
+                            Text(String(format: "LTV %.0f %%", lr.ltv * 100)).foregroundStyle(color(lr.level))
+                        }
+                        Text(String(format: "Likvidace při %.0f Kč/BTC · rezerva %.0f %%", lr.liquidationPriceCzk, lr.bufferPct * 100))
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                Text("Pozn.: Efektivní likvidace nahoře je cena BTC, při které je na likvidaci CELÉ portfolio (všechny půjčky proti všem BTC) — ne jedna půjčka.")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
         }
         .navigationTitle("Risk cockpit")

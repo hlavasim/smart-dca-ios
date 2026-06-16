@@ -1,11 +1,21 @@
 import Foundation
 
-/// Živý souhrn z Fio účtu (read-only token v Keychain). Aktuální zůstatek + útrata/příjem tento měsíc.
+/// Jedna Fio transakce (pro kategorizaci v kokpitu).
+struct FioTransaction: Equatable, Identifiable {
+    var id: String          // ID pohybu z Fio (stabilní)
+    var date: Date
+    var amountCzk: Decimal   // záporné = výdaj
+    var counterparty: String
+    var note: String
+}
+
+/// Živý souhrn z Fio účtu (read-only token v Keychain). Zůstatek + transakce za období.
 struct FioSummary: Equatable {
     var balanceCzk: Decimal
-    var spentThisMonthCzk: Decimal
+    var spentThisMonthCzk: Decimal       // hrubá útrata (bez override); VM dopočítá očištěnou
     var incomeThisMonthCzk: Decimal
     var txCount: Int
+    var transactions: [FioTransaction]
 }
 
 /// Čte Fio API (fioapi.fio.cz/v1/rest). Token je v URL (read-only), žádné hlavičky.
@@ -41,18 +51,30 @@ final class FioService {
                   let info = acc["info"] as? [String: Any] else { return .failure(.parse) }
 
             let balance = dec(info["closingBalance"])
-            var spent = Decimal(0), income = Decimal(0), count = 0
+            let dateFmt = DateFormatter()
+            dateFmt.dateFormat = "yyyy-MM-dd"
+            dateFmt.timeZone = cal.timeZone
+            var spent = Decimal(0), income = Decimal(0)
+            var transactions: [FioTransaction] = []
             if let txList = acc["transactionList"] as? [String: Any],
                let txs = txList["transaction"] as? [[String: Any]] {
-                for t in txs {
-                    guard let col1 = t["column1"] as? [String: Any] else { continue }
-                    let amt = dec(col1["value"])
-                    count += 1
+                for (i, t) in txs.enumerated() {
+                    let amt = dec(colVal(t, "column1"))
+                    if amt == 0 { continue }
                     if amt < 0 { spent += -amt } else { income += amt }
+                    let id = strOf(colVal(t, "column22")) ?? "fio-\(i)"
+                    let dStr = String((strOf(colVal(t, "column0")) ?? "").prefix(10))
+                    transactions.append(FioTransaction(
+                        id: id,
+                        date: dateFmt.date(from: dStr) ?? Date(),
+                        amountCzk: amt,
+                        counterparty: strOf(colVal(t, "column10")) ?? strOf(colVal(t, "column7")) ?? strOf(colVal(t, "column2")) ?? "",
+                        note: strOf(colVal(t, "column16")) ?? strOf(colVal(t, "column25")) ?? ""))
                 }
             }
             return .success(FioSummary(balanceCzk: balance, spentThisMonthCzk: spent,
-                                       incomeThisMonthCzk: income, txCount: count))
+                                       incomeThisMonthCzk: income, txCount: transactions.count,
+                                       transactions: transactions.sorted { $0.date > $1.date }))
         } catch {
             return .failure(.http)
         }
@@ -62,5 +84,16 @@ final class FioService {
         if let n = v as? NSNumber { return n.decimalValue }
         if let s = v as? String, let d = Decimal(string: s) { return d }
         return 0
+    }
+
+    /// Fio sloupce mají tvar {"value": ..., "name": ...} → vytáhne value.
+    private func colVal(_ t: [String: Any], _ key: String) -> Any? {
+        (t[key] as? [String: Any])?["value"]
+    }
+
+    private func strOf(_ v: Any?) -> String? {
+        if let s = v as? String { return s.trimmingCharacters(in: .whitespaces) }
+        if let n = v as? NSNumber { return n.stringValue }
+        return nil
     }
 }

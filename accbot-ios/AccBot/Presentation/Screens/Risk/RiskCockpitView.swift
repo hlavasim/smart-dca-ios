@@ -32,7 +32,7 @@ struct RiskCockpitView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Text("Pozn.: „Efektivní likvidace" nahoře je cena BTC, při které je na likvidaci CELÉ portfolio (všechny půjčky proti všem BTC) — ne jedna půjčka.")
+                Text("Pozn.: Efektivní likvidace nahoře je cena BTC, při které je na likvidaci CELÉ portfolio (všechny půjčky proti všem BTC) — ne jedna půjčka.")
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }

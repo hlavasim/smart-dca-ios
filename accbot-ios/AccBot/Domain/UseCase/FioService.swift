@@ -21,16 +21,16 @@ final class FioService {
         self.tokenStore = tokenStore
     }
 
-    func fetchCurrentMonth(now: Date = Date()) async -> Result<FioSummary, FioError> {
+    /// Souhrn za zadané období (typicky od poslední výplaty do dnes — výplatní cyklus).
+    func fetch(from: Date, to: Date) async -> Result<FioSummary, FioError> {
         guard let token = tokenStore.get(), !token.isEmpty else { return .failure(.noToken) }
 
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "Europe/Prague") ?? .current
-        let firstOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
         fmt.timeZone = cal.timeZone
-        let url = "https://fioapi.fio.cz/v1/rest/periods/\(token)/\(fmt.string(from: firstOfMonth))/\(fmt.string(from: now))/transactions.json"
+        let url = "https://fioapi.fio.cz/v1/rest/periods/\(token)/\(fmt.string(from: from))/\(fmt.string(from: to))/transactions.json"
 
         do {
             let (data, resp) = try await client.get(url: url)

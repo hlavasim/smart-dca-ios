@@ -27,6 +27,7 @@ final class AppDependencies: ObservableObject {
     let financeService: FinanceService
     let fioTokenStore: TokenStore
     let fioService: FioService
+    let manualSpendStore: ManualSpendStore
     private var cancellables = Set<AnyCancellable>()
 
     /// Get the active database based on sandbox mode
@@ -64,6 +65,7 @@ final class AppDependencies: ObservableObject {
         let financeService = FinanceService(gitHubBackupService: gitHubBackupService)
         let fioTokenStore = TokenStore(account: "fio_token")
         let fioService = FioService(client: networkClient, tokenStore: fioTokenStore)
+        let manualSpendStore = ManualSpendStore()
         let dcaExecutionEngine = DcaExecutionEngine(
             database: database,
             sandboxDatabase: sandboxDatabase,
@@ -99,6 +101,7 @@ final class AppDependencies: ObservableObject {
         self.financeService = financeService
         self.fioTokenStore = fioTokenStore
         self.fioService = fioService
+        self.manualSpendStore = manualSpendStore
 
         // Forward onboardingPreferences changes so RootView re-renders
         // when onboarding completes (rare event, no perf concern).

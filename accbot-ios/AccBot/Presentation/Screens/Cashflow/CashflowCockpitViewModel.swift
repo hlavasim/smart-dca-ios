@@ -17,10 +17,36 @@ final class CashflowCockpitViewModel: ObservableObject {
     @Published var standingVisible: [StandingOrders.Order] = []
     @Published var investedFlow: [StandingOrders.Order] = []   // Investice/převody (odkládání)
 
+    // Fio (živé útraty)
+    @Published var fioSummary: FioSummary?
+    @Published var fioLoading = false
+    @Published var fioError: String?
+
     private let financeService: FinanceService
+    private let fioService: FioService
 
     init(deps: AppDependencies) {
         self.financeService = deps.financeService
+        self.fioService = deps.fioService
+    }
+
+    func refreshFio() async {
+        fioLoading = true
+        defer { fioLoading = false }
+        switch await fioService.fetchCurrentMonth() {
+        case .success(let summary):
+            fioSummary = summary
+            fioError = nil
+        case .failure(let err):
+            fioError = {
+                switch err {
+                case .noToken: return String(localized: "Chybí Fio token — přidej ho v Nastavení.")
+                case .rateLimited: return String(localized: "Fio: moc časté dotazy (limit 1×/30 s), zkus za chvíli.")
+                case .http: return String(localized: "Fio se nepodařilo načíst (síť/API).")
+                case .parse: return String(localized: "Fio: nečekaná odpověď.")
+                }
+            }()
+        }
     }
 
     var maxCategoryCzk: Int { categories.map(\.monthlyMedianCzk).max() ?? 1 }

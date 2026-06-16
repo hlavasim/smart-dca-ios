@@ -1,10 +1,15 @@
 import Foundation
 import Security
 
-/// Uloží GitHub PAT do Keychain (device-only). PAT se při ztrátě zařízení vygeneruje znovu.
+/// Uloží token (PAT / Fio) do Keychain (device-only). Token se při ztrátě zařízení vygeneruje znovu.
+/// `account` rozlišuje token (default GitHub PAT; "fio_token" pro Fio).
 final class TokenStore {
     private let service = "com.accbot.dca.tokens"
-    private let account = "github_pat"
+    private let account: String
+
+    init(account: String = "github_pat") {
+        self.account = account
+    }
 
     func save(_ token: String) {
         let data = Data(token.utf8)

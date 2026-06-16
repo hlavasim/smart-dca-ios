@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var showChangelog = false
     @State private var showNotificationInfo = false
     @State private var patInput = ""
+    @State private var fioInput = ""
     @State private var restoreMsg: String?
 
     var body: some View {
@@ -397,6 +398,17 @@ struct SettingsView: View {
                 restoreMsg = String(localized: "PAT uložen ✓")
             }
             .disabled(patInput.isEmpty)
+            .listRowBackground(colors.surface)
+
+            SecureField(String(localized: "Fio token (read-only)"), text: $fioInput)
+                .listRowBackground(colors.surface)
+
+            Button(String(localized: "Uložit Fio token")) {
+                dependencies.fioTokenStore.save(fioInput)
+                fioInput = ""
+                restoreMsg = String(localized: "Fio token uložen ✓")
+            }
+            .disabled(fioInput.isEmpty)
             .listRowBackground(colors.surface)
 
             Button(String(localized: "Stáhnout zálohu teď")) {

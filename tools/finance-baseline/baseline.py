@@ -11,7 +11,6 @@ from datetime import date
 from normalize import normalize_merchant
 
 YEAR = 2026
-ALLOWED_SCOPES = {"Domácnost", "Byznys"}
 
 
 def _median0(values):
@@ -27,10 +26,10 @@ def main(bt_path, cat_path, items_path, as_of):
     cur_ym = (as_of.year, as_of.month)
 
     def included(t):
+        # Všechny výdaje KROMĚ investic (isPrivate) a převodů/čerpání úvěru
+        # (scope "Převod" + excludeFromCashflow = interní přesuny / úvěrové operace, ne výdaj).
         c = meta.get(t.get("category"))
-        if not c or c.get("excludeFromCashflow") or c.get("isPrivate"):
-            return False
-        if c.get("scope") not in ALLOWED_SCOPES:
+        if not c or c.get("isPrivate") or c.get("excludeFromCashflow") or c.get("scope") == "Převod":
             return False
         if t["amountCzk"] >= 0:           # jen výdaje
             return False
@@ -99,7 +98,7 @@ def main(bt_path, cat_path, items_path, as_of):
         "generatedAt": as_of.isoformat() + "T00:00:00Z",
         "sourceYear": YEAR,
         "monthsCounted": len(months),
-        "scope": "household",
+        "scope": "all-except-investments",
         "payday": {"dayOfMonth": payday, "source": "avg(SOFTIM dates)"},
         "categories": categories_out,
     }

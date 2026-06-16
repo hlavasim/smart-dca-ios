@@ -56,6 +56,30 @@ def test_tier1_merchant_and_payday():
     assert out["payday"]["dayOfMonth"] == 26
 
 
+def test_includes_expense_regardless_of_scope_but_excludes_investments_and_transfers():
+    cats = CATS + [{"name": "Jiné", "type": "Expense", "excludeFromCashflow": False, "isPrivate": False, "scope": "Cosi"}]
+    tx = [
+        {"id": "j1", "date": "2026-01-10T00:00:00", "amountCzk": -500, "category": "Jiné", "counterparty": "XYZ"},
+        {"id": "j2", "date": "2026-02-10T00:00:00", "amountCzk": -700, "category": "Jiné", "counterparty": "XYZ"},
+        {"id": "inv", "date": "2026-01-10T00:00:00", "amountCzk": -50000, "category": "Investice", "counterparty": "C"},
+    ]
+    out = _run(tx, cats, {})
+    jine = next(c for c in out["categories"] if c["name"] == "Jiné")
+    assert jine["monthlyMedianCzk"] == 600
+    assert all(c["name"] != "Investice" for c in out["categories"])
+
+
+def test_excludes_prevod_scope_even_if_not_excludeFromCashflow():
+    # Čerpání úvěru: scope Převod, excludeFromCashflow=false → NESMÍ se počítat jako výdaj.
+    cats = CATS + [{"name": "Čerpání úvěru", "type": "Transfer", "excludeFromCashflow": False, "isPrivate": False, "scope": "Převod"}]
+    tx = [
+        {"id": "u1", "date": "2026-01-10T00:00:00", "amountCzk": -170000, "category": "Čerpání úvěru", "counterparty": "PREUVER"},
+        {"id": "p1", "date": "2026-01-10T00:00:00", "amountCzk": -500, "category": "Potraviny", "counterparty": "KAUFLAND"},
+    ]
+    out = _run(tx, cats, {})
+    assert all(c["name"] != "Čerpání úvěru" for c in out["categories"])
+
+
 def test_tier2_lineitems_reattribute_without_double_count():
     tx = [
         {"id": "alza1", "date": "2026-01-10T00:00:00", "amountCzk": -1200, "category": "Nákupy", "counterparty": "ALZA"},

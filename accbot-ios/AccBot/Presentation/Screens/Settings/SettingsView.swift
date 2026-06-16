@@ -347,6 +347,18 @@ struct SettingsView: View {
     private var financeSection: some View {
         Section {
             Button {
+                router.navigate(to: .cashflowCockpit)
+            } label: {
+                HStack {
+                    Label(String(localized: "Cashflow"), systemImage: "chart.line.uptrend.xyaxis")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(colors.onSurfaceVariant).font(AccBotFonts.captionSmall)
+                }
+            }
+            .listRowBackground(colors.surface)
+
+            Button {
                 router.navigate(to: .riskCockpit)
             } label: {
                 HStack {

@@ -24,6 +24,7 @@ final class AppDependencies: ObservableObject {
     let tokenStore: TokenStore
     let snapshotService: SnapshotService
     let gitHubBackupService: GitHubBackupService
+    let financeService: FinanceService
     private var cancellables = Set<AnyCancellable>()
 
     /// Get the active database based on sandbox mode
@@ -58,6 +59,7 @@ final class AppDependencies: ObservableObject {
         let tokenStore = TokenStore()
         let snapshotService = SnapshotService()
         let gitHubBackupService = GitHubBackupService(client: networkClient, tokenStore: tokenStore)
+        let financeService = FinanceService(gitHubBackupService: gitHubBackupService)
         let dcaExecutionEngine = DcaExecutionEngine(
             database: database,
             sandboxDatabase: sandboxDatabase,
@@ -90,6 +92,7 @@ final class AppDependencies: ObservableObject {
         self.tokenStore = tokenStore
         self.snapshotService = snapshotService
         self.gitHubBackupService = gitHubBackupService
+        self.financeService = financeService
 
         // Forward onboardingPreferences changes so RootView re-renders
         // when onboarding completes (rare event, no perf concern).

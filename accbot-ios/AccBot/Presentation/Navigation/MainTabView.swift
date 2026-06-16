@@ -227,6 +227,8 @@ struct MainTabView: View {
             RiskCockpitView(deps: dependencies)
         case .loanManagement:
             LoanManagementView(deps: dependencies)
+        case .cashflowCockpit:
+            CashflowCockpitView(deps: dependencies)
         }
     }
 }

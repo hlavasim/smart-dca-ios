@@ -93,11 +93,11 @@ def main(bt_path, cat_path, items_path, as_of):
             entry["subcategories"] = sorted(subs, key=lambda x: -x["monthlyMedianCzk"])
         categories_out.append(entry)
 
-    # Příjem: median měsíčně z příjmových kategorií (type Income), bez částečného měsíce.
+    # Příjem = JEN výplata od SOFTIMu. Ostatní kladné pohyby jsou investiční machinace
+    # (půjčky, přesuny, prodeje) — ne příjem. Median měsíčně, bez částečného aktuálního měsíce.
     income_m = defaultdict(float)
     for t in txs:
-        c = meta.get(t.get("category"))
-        if not c or c.get("type") != "Income" or c.get("excludeFromCashflow") or c.get("isPrivate"):
+        if "SOFTIM" not in (t.get("counterparty") or "").upper():
             continue
         if t["amountCzk"] <= 0 or t["date"][:4] != str(YEAR):
             continue
@@ -108,13 +108,15 @@ def main(bt_path, cat_path, items_path, as_of):
 
     # Skutečný deficit (výdaje − příjem) za poslední 3 uzavřené měsíce, průměr.
     # Kladné = pálíš víc, než vyděláš. Pro „runway na nulu" dle reálu, ne jen mediánu.
+    # POZOR: příjem bereme STABILNÍ (medián), NE per-kalendářní-měsíc — když výplata dorazí
+    # o pár dní později (jiný měsíc), vyšel by ten měsíc jako obří fake deficit (viz květen).
     month_exp = defaultdict(float)
     for mm in cat_m.values():
         for ym, v in mm.items():
             month_exp[ym] += v
     recent_months = sorted(months)[-3:]
-    recent_deficits = [month_exp.get(ym, 0.0) - income_m.get(ym, 0.0) for ym in recent_months]
-    recent_avg_deficit = round(sum(recent_deficits) / len(recent_deficits)) if recent_deficits else 0
+    recent_avg_exp = (sum(month_exp.get(ym, 0.0) for ym in recent_months) / len(recent_months)) if recent_months else 0.0
+    recent_avg_deficit = round(recent_avg_exp - income_median)
 
     paydays = [int(t["date"][8:10]) for t in txs
                if "SOFTIM" in (t.get("counterparty") or "").upper()

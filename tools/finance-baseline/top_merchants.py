@@ -3,15 +3,19 @@
 Ukáže i kategorie, ve kterých merchant vystupuje (multi-kategorie = kandidát na line-item detail).
 Usage: python top_merchants.py <bank-transactions.json> <categories.json> [N]"""
 import sys
+import os
 import json
 from collections import defaultdict
-from normalize import normalize_merchant
+from normalize import canonical_merchant, build_patterns
 
 
 def main(bt_path, cat_path, n):
     sys.stdout.reconfigure(encoding="utf-8")
     txs = json.load(open(bt_path, encoding="utf-8"))["transactions"]
     meta = {c["name"]: c for c in json.load(open(cat_path, encoding="utf-8"))["categories"]}
+    rules_path = os.path.join(os.path.dirname(cat_path), "category-rules.json")
+    rules = json.load(open(rules_path, encoding="utf-8")).get("rules", []) if os.path.exists(rules_path) else []
+    patterns = build_patterns(rules)
 
     agg = defaultdict(lambda: {"sum": 0.0, "count": 0, "cats": defaultdict(float), "raw": ""})
     for t in txs:
@@ -20,7 +24,7 @@ def main(bt_path, cat_path, n):
         c = meta.get(t.get("category"))
         if not c or c.get("isPrivate") or c.get("excludeFromCashflow") or c.get("scope") == "Převod":
             continue
-        m = normalize_merchant(t.get("counterparty"))
+        m = canonical_merchant(t.get("counterparty"), patterns)
         if not m:
             continue
         a = agg[m]

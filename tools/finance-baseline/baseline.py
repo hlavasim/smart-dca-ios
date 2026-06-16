@@ -4,11 +4,12 @@ z finančních dat. Medián měsíčně, bez částečného aktuálního měsíc
 Usage: python baseline.py <bank-transactions.json> <categories.json> [transaction-items.json] [--as-of YYYY-MM-DD]
 Výstup: finance-baseline.json na stdout."""
 import sys
+import os
 import json
 import statistics
 from collections import defaultdict
 from datetime import date
-from normalize import normalize_merchant
+from normalize import canonical_merchant, build_patterns
 
 YEAR = 2026
 
@@ -24,6 +25,11 @@ def main(bt_path, cat_path, items_path, as_of):
     items = json.load(open(items_path, encoding="utf-8")).get("items", {}) if items_path else {}
     meta = {c["name"]: c for c in cats}
     cur_ym = (as_of.year, as_of.month)
+
+    # merchant grouping podle kurátorovaných pravidel (category-rules.json vedle categories.json)
+    rules_path = os.path.join(os.path.dirname(cat_path), "category-rules.json")
+    rules = json.load(open(rules_path, encoding="utf-8")).get("rules", []) if os.path.exists(rules_path) else []
+    patterns = build_patterns(rules)
 
     def included(t):
         # Všechny výdaje KROMĚ investic (isPrivate) a převodů/čerpání úvěru
@@ -50,7 +56,7 @@ def main(bt_path, cat_path, items_path, as_of):
             continue
         ym = t["date"][:7]
         months.add(ym)
-        merchant = normalize_merchant(t.get("counterparty"))
+        merchant = canonical_merchant(t.get("counterparty"), patterns)
         line_items = items.get(t["id"])
         if line_items:
             for li in line_items:

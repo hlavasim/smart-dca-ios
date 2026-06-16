@@ -46,7 +46,7 @@ final class RiskCockpitViewModel: ObservableObject {
         if let worst = loanRisks.map(\.ltv).max() {
             r.append(Row(label: "Nejhorší LTV", value: pct(worst), level: RiskMetricsUseCase.level(ltv: worst)))
         }
-        r.append(Row(label: "Efektivní likvidace", value: czk(effLiq), level: .ok))
+        r.append(Row(label: "Efektivní likvidace (celé portfolio)", value: czk(effLiq), level: .ok))
         r.append(Row(label: "Volné BTC (daňově)", value: btc(tax.taxFree), level: .ok))
         r.append(Row(label: "Zdanitelné BTC", value: btc(tax.taxable), level: .ok))
         rows = r

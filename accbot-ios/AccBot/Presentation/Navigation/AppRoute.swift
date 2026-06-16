@@ -29,16 +29,18 @@ enum AppRoute: Hashable {
 
 /// Bottom navigation tab items
 enum TabItem: Int, CaseIterable, Identifiable {
-    case dashboard = 0
-    case portfolio = 1
-    case notifications = 2
-    case settings = 3
+    case cashflow = 0
+    case dashboard = 1
+    case portfolio = 2
+    case notifications = 3
+    case settings = 4
 
     var id: Int { rawValue }
 
     var title: String {
         switch self {
-        case .dashboard: return String(localized: "Dashboard")
+        case .cashflow: return String(localized: "Přehled")
+        case .dashboard: return String(localized: "BTC")
         case .portfolio: return String(localized: "Portfolio")
         case .notifications: return String(localized: "Notifications")
         case .settings: return String(localized: "Settings")
@@ -47,7 +49,8 @@ enum TabItem: Int, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .dashboard: return "house.fill"
+        case .cashflow: return "chart.line.uptrend.xyaxis"
+        case .dashboard: return "bitcoinsign.circle.fill"
         case .portfolio: return "chart.pie.fill"
         case .notifications: return "bell.fill"
         case .settings: return "gearshape.fill"
@@ -56,7 +59,8 @@ enum TabItem: Int, CaseIterable, Identifiable {
 
     func systemImage(isSelected: Bool) -> String {
         switch self {
-        case .dashboard: return isSelected ? "house.fill" : "house"
+        case .cashflow: return "chart.line.uptrend.xyaxis"
+        case .dashboard: return isSelected ? "bitcoinsign.circle.fill" : "bitcoinsign.circle"
         case .portfolio: return isSelected ? "chart.pie.fill" : "chart.pie"
         case .notifications: return isSelected ? "bell.fill" : "bell"
         case .settings: return isSelected ? "gearshape.fill" : "gearshape"

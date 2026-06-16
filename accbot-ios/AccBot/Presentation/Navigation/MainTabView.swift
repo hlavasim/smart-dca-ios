@@ -1,83 +1,45 @@
 import SwiftUI
 import Combine
 
-/// Main tab view with 4 tabs: Dashboard, Portfolio, Notifications, Settings.
-/// Uses a manual ZStack + CustomTabBar instead of native TabView to avoid
-/// known SwiftUI TabView + NavigationStack lifecycle bugs and to provide
-/// a custom animated tab bar design.
-///
-/// Each tab is lazily created on first visit via `LazyTab`, so only the
-/// active tab's view hierarchy is fully computed. Once created, tabs stay
-/// alive (offset-hidden) to preserve their NavigationStack state.
-///
-/// Tab switching uses offset-based horizontal paging with continuous drag
-/// tracking, matching the Android HorizontalPager "book flipping" feel.
+/// Hlavní navigace — NATIVNÍ TabView (rendruje jen aktivní tab → plynulý scroll, bez sekání).
+/// Taby: Přehled (Cashflow, home) · BTC (DCA dashboard) · Portfolio · Oznámení · Nastavení.
+/// (Dřív custom ZStack pager — soupeřil se scrollem a sekal ~15fps; nahrazen.)
 struct MainTabView: View {
     @EnvironmentObject var router: AppRouter
     @EnvironmentObject var dependencies: AppDependencies
     @Environment(\.accBotColors) private var colors
-
-    /// Tracks which tabs have been visited at least once.
-    @State private var loadedTabs: Set<TabItem> = [.dashboard]
-
-    /// Real-time horizontal drag offset for continuous page tracking.
-    @State private var dragOffset: CGFloat = 0
-
-    /// Whether the current gesture has been identified as horizontal.
-    @State private var isDraggingHorizontally: Bool? = nil
 
     /// Changelog auto-show on version update.
     @State private var showChangelog = false
     @State private var changelogEntries: [ChangelogEntry] = []
 
     var body: some View {
-        VStack(spacing: 0) {
-            GeometryReader { geo in
-                let screenWidth = geo.size.width
+        // Nativní TabView — rendruje jen aktivní tab (GPU-optimalizovaný scroll), bez sekání.
+        TabView(selection: $router.selectedTab) {
+            cashflowTab
+                .tag(TabItem.cashflow)
+                .tabItem { Label(String(localized: "Přehled"), systemImage: "chart.line.uptrend.xyaxis") }
 
-                ZStack {
-                    ForEach(TabItem.allCases) { tab in
-                        LazyTab(
-                            tab: tab,
-                            selectedTab: router.selectedTab,
-                            dragOffset: dragOffset,
-                            screenWidth: screenWidth,
-                            loadedTabs: $loadedTabs
-                        ) {
-                            tabContent(for: tab)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-                // Swipe-mezi-taby gesture ODSTRANĚN — soupeřil se scrollem uvnitř tabů
-                // a způsoboval sekání (~15fps). Taby se přepínají přes CustomTabBar tlačítka.
-            }
+            dashboardTab
+                .tag(TabItem.dashboard)
+                .tabItem { Label(String(localized: "BTC"), systemImage: "bitcoinsign.circle") }
 
-            CustomTabBar(
-                selectedTab: $router.selectedTab,
-                unreadNotificationCount: router.unreadNotificationCount,
-                onTabSelected: { newTab in
-                    if newTab == router.selectedTab {
-                        router.popToRoot()
-                    } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
-                            router.selectedTab = newTab
-                            dragOffset = 0
-                        }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }
-                }
-            )
+            portfolioTab
+                .tag(TabItem.portfolio)
+                .tabItem { Label(String(localized: "Portfolio"), systemImage: "chart.pie") }
+
+            notificationsTab
+                .tag(TabItem.notifications)
+                .tabItem { Label(String(localized: "Oznámení"), systemImage: "bell") }
+                .badge(router.unreadNotificationCount)
+
+            settingsTab
+                .tag(TabItem.settings)
+                .tabItem { Label(String(localized: "Nastavení"), systemImage: "gearshape") }
         }
+        .tint(colors.primary)
         .ignoresSafeArea(.keyboard)
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-        .onChange(of: router.selectedTab) { newTab in
-            // Preload adjacent tabs so peeking during drag shows content
-            let i = newTab.rawValue
-            if i > 0, let prev = TabItem(rawValue: i - 1) { loadedTabs.insert(prev) }
-            if i < TabItem.allCases.count - 1, let next = TabItem(rawValue: i + 1) { loadedTabs.insert(next) }
-        }
         .onReceive(
             dependencies.activeDatabase.notificationDao.observeUnreadCount()
                 .replaceError(with: 0)
@@ -103,13 +65,12 @@ struct MainTabView: View {
         }
     }
 
-    @ViewBuilder
-    private func tabContent(for tab: TabItem) -> some View {
-        switch tab {
-        case .dashboard: dashboardTab
-        case .portfolio: portfolioTab
-        case .notifications: notificationsTab
-        case .settings: settingsTab
+    private var cashflowTab: some View {
+        NavigationStack(path: $router.cashflowPath) {
+            CashflowCockpitView(deps: dependencies)
+                .navigationDestination(for: AppRoute.self) { route in
+                    routeDestination(route)
+                }
         }
     }
 
@@ -184,42 +145,3 @@ struct MainTabView: View {
     }
 }
 
-// MARK: - Lazy Tab
-
-/// Lazily creates a tab's content on first selection and keeps it alive
-/// (but offset off-screen) once created. This avoids computing all 4 heavy
-/// view hierarchies (NavigationStack + ViewModel + DB observations) on startup.
-///
-/// Uses horizontal offset positioning for continuous page-tracking during drag,
-/// matching the Android HorizontalPager experience.
-private struct LazyTab<Content: View>: View {
-    let tab: TabItem
-    let selectedTab: TabItem
-    let dragOffset: CGFloat
-    let screenWidth: CGFloat
-    @Binding var loadedTabs: Set<TabItem>
-    @ViewBuilder let content: () -> Content
-
-    private var isSelected: Bool { tab == selectedTab }
-
-    private var xOffset: CGFloat {
-        CGFloat(tab.rawValue - selectedTab.rawValue) * screenWidth + dragOffset
-    }
-
-    var body: some View {
-        Group {
-            if loadedTabs.contains(tab) {
-                content()
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .offset(x: xOffset)
-        .allowsHitTesting(isSelected && dragOffset == 0)
-        .accessibilityHidden(!isSelected)
-        .onChange(of: selectedTab) { newTab in
-            if newTab == tab {
-                loadedTabs.insert(tab)
-            }
-        }
-    }
-}

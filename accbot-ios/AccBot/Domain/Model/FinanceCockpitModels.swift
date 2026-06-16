@@ -29,6 +29,12 @@ struct FinanceBaseline: Codable, Equatable {
     }
 }
 
+/// Ruční vstupy kokpitu, co přežijí reinstall (git: cockpit-state.json): výplata + ruční útraty.
+struct CockpitState: Codable, Equatable {
+    var nextPaycheckCzk: Int
+    var manualSpends: [ManualSpend]
+}
+
 /// Trvalé příkazy z `standing-orders.json` — banka je exekuuje, appka je jen počítá v jejich den.
 struct StandingOrders: Codable, Equatable {
     var version: Int

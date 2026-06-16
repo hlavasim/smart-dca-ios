@@ -84,6 +84,19 @@ final class CashflowCockpitViewModel: ObservableObject {
     func setNextPaycheck(_ czk: Int) {
         nextPaycheckCzk = czk
         defaults.set(czk, forKey: paycheckKey)
+        pushCockpitState()
+    }
+
+    /// Aktuální ruční vstupy kokpitu (výplata + všechny ruční útraty) — pro git.
+    private func currentCockpitState() -> CockpitState {
+        CockpitState(nextPaycheckCzk: nextPaycheckCzk, manualSpends: manualStore.all())
+    }
+
+    /// Ulož ruční vstupy kokpitu do gitu (po každé změně) — přežijí reinstall.
+    private func pushCockpitState() {
+        let state = currentCockpitState()
+        let svc = financeService
+        Task { await svc.saveCockpitState(state) }
     }
 
     /// Reálné trvalé platby (bills, daně, splátky) → odečíst od hrubé výplaty = čistý zbytek.
@@ -141,6 +154,20 @@ final class CashflowCockpitViewModel: ObservableObject {
         // Fio kategorie z gitu (aby přežily reinstall / byly napříč zařízeními)
         let remote = await financeService.loadFioOverrides()
         if !remote.isEmpty { fioCategoryStore.merge(remote) }
+        // Ruční vstupy kokpitu z gitu (výplata + ruční útraty) — přežijí reinstall
+        let remoteState = await financeService.loadCockpitState()
+        if let s = remoteState {
+            if s.nextPaycheckCzk > 0 {
+                nextPaycheckCzk = s.nextPaycheckCzk
+                defaults.set(s.nextPaycheckCzk, forKey: paycheckKey)
+            }
+            manualStore.merge(s.manualSpends)
+        }
+        manualSpends = manualStore.since(lastPayday)
+        // Seed/sync git, když má lokál něco navíc (první spuštění / lokální položky)
+        let merged = currentCockpitState()
+        let hasData = merged.nextPaycheckCzk > 0 || !merged.manualSpends.isEmpty
+        if hasData && (remoteState == nil || remoteState! != merged) { pushCockpitState() }
         errorMessage = nil
         loaded = true
         recompute()
@@ -177,12 +204,14 @@ final class CashflowCockpitViewModel: ObservableObject {
         manualStore.add(s)
         manualSpends = manualStore.since(lastPayday)
         recompute()
+        pushCockpitState()
     }
 
     func removeManual(id: String) {
         manualStore.remove(id: id)
         manualSpends = manualStore.since(lastPayday)
         recompute()
+        pushCockpitState()
     }
 
     var manualSpentCycle: Decimal { manualSpends.reduce(0) { $0 + $1.amountCzk } }

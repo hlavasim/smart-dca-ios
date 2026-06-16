@@ -34,6 +34,13 @@ final class ManualSpendStore {
         save(all().filter { $0.id != id })
     }
 
+    /// Sloučí útraty z gitu (union podle id — lokální se neztratí).
+    func merge(_ remote: [ManualSpend]) {
+        var byId = Dictionary(all().map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        for r in remote where byId[r.id] == nil { byId[r.id] = r }
+        save(Array(byId.values))
+    }
+
     /// Útraty od daného data (včetně) — pro útratu v aktuálním výplatním cyklu.
     func since(_ date: Date) -> [ManualSpend] {
         all().filter { $0.date >= date }

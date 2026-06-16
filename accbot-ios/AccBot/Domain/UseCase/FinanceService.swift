@@ -35,4 +35,17 @@ final class FinanceService {
         guard let data = try? JSONEncoder().encode(overrides) else { return }
         _ = await gitHub.push(data, path: "fio-overrides.json", message: "fio: kategorie transakcí")
     }
+
+    /// Ruční vstupy kokpitu (výplata + ruční útraty) z gitu — aby přežily reinstall.
+    func loadCockpitState() async -> CockpitState? {
+        guard let (data, _) = await gitHub.fetch(path: "cockpit-state.json"),
+              let s = try? JSONDecoder().decode(CockpitState.self, from: data) else { return nil }
+        return s
+    }
+
+    /// Uloží ruční vstupy kokpitu do gitu (po každé změně).
+    func saveCockpitState(_ state: CockpitState) async {
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        _ = await gitHub.push(data, path: "cockpit-state.json", message: "kokpit: výplata + ruční útraty")
+    }
 }

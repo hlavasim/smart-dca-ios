@@ -21,13 +21,20 @@ final class GitHubBackupService {
         ]
     }
 
-    private var contentsUrl: String { "https://api.github.com/repos/\(repo)/contents/\(path)" }
+    private var contentsUrl: String { contentsUrl(for: path) }
+    private func contentsUrl(for path: String) -> String {
+        "https://api.github.com/repos/\(repo)/contents/\(path)"
+    }
 
-    /// Vrátí (content, sha) nebo nil když soubor neexistuje / chybí token.
-    func fetch() async -> (json: Data, sha: String)? {
+    /// Vrátí (content, sha) snapshot.json — zkratka pro fetch(path:).
+    func fetch() async -> (json: Data, sha: String)? { await fetch(path: path) }
+
+    /// Vrátí (content, sha) libovolného souboru z repa (finance-baseline.json, standing-orders.json…),
+    /// nebo nil když soubor neexistuje / chybí token.
+    func fetch(path: String) async -> (json: Data, sha: String)? {
         guard let headers = authHeaders else { return nil }
         do {
-            let (data, _) = try await client.get(url: contentsUrl, headers: headers)
+            let (data, _) = try await client.get(url: contentsUrl(for: path), headers: headers)
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let b64 = (json["content"] as? String)?.replacingOccurrences(of: "\n", with: ""),
                   let sha = json["sha"] as? String,

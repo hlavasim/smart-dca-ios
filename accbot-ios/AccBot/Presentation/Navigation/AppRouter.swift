@@ -3,7 +3,8 @@ import SwiftUI
 /// NavigationPath management for the app
 @MainActor
 final class AppRouter: ObservableObject {
-    @Published var selectedTab: TabItem = .dashboard
+    @Published var selectedTab: TabItem = .cashflow
+    @Published var cashflowPath = NavigationPath()
     @Published var dashboardPath = NavigationPath()
     @Published var portfolioPath = NavigationPath()
     @Published var notificationsPath = NavigationPath()
@@ -27,6 +28,7 @@ final class AppRouter: ObservableObject {
         lastNavigationTime = now
 
         switch selectedTab {
+        case .cashflow: cashflowPath.append(route)
         case .dashboard: dashboardPath.append(route)
         case .portfolio: portfolioPath.append(route)
         case .notifications: notificationsPath.append(route)
@@ -43,6 +45,7 @@ final class AppRouter: ObservableObject {
 
         selectedTab = tab
         switch tab {
+        case .cashflow: cashflowPath.append(route)
         case .dashboard: dashboardPath.append(route)
         case .portfolio: portfolioPath.append(route)
         case .notifications: notificationsPath.append(route)
@@ -53,6 +56,7 @@ final class AppRouter: ObservableObject {
     /// Pop the current navigation stack
     func pop() {
         switch selectedTab {
+        case .cashflow: if !cashflowPath.isEmpty { cashflowPath.removeLast() }
         case .dashboard: if !dashboardPath.isEmpty { dashboardPath.removeLast() }
         case .portfolio: if !portfolioPath.isEmpty { portfolioPath.removeLast() }
         case .notifications: if !notificationsPath.isEmpty { notificationsPath.removeLast() }
@@ -63,6 +67,7 @@ final class AppRouter: ObservableObject {
     /// Pop to root of the current tab
     func popToRoot() {
         switch selectedTab {
+        case .cashflow: cashflowPath = NavigationPath()
         case .dashboard: dashboardPath = NavigationPath()
         case .portfolio: portfolioPath = NavigationPath()
         case .notifications: notificationsPath = NavigationPath()

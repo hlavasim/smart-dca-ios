@@ -46,6 +46,12 @@ jobs:
           brew install xcodegen
           gem install xcpretty
 
+      - name: Stamp build version (yyyy.mm.dd.hh.mm.ss.fff)
+        run: |
+          VER=$(python3 -c "from datetime import datetime, timezone; n=datetime.now(timezone.utc); print(n.strftime('%Y.%m.%d.%H.%M.%S.') + f'{n.microsecond//1000:03d}')")
+          printf 'enum BuildInfo { static let version = \"%s\" }\n' "$VER" > AccBot/BuildInfo.swift
+          echo "Stamped version: $VER"
+
       - name: Generate Xcode project
         run: xcodegen generate
 

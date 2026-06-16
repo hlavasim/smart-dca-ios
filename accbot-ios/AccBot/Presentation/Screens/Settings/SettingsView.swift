@@ -438,6 +438,16 @@ struct SettingsView: View {
                 Text(backupStatusText).foregroundStyle(colors.onSurfaceVariant)
             }
             .listRowBackground(colors.surface)
+
+            HStack {
+                Text(String(localized: "Verze (build)"))
+                Spacer()
+                Text(BuildInfo.version)
+                    .font(AccBotFonts.monoSmall)
+                    .foregroundStyle(colors.onSurfaceVariant)
+                    .textSelection(.enabled)
+            }
+            .listRowBackground(colors.surface)
         } header: {
             Text(String(localized: "Finance & záloha")).accessibilityAddTraits(.isHeader)
         }

@@ -95,3 +95,21 @@ def test_tier2_lineitems_reattribute_without_double_count():
     assert sub["monthlyMedianCzk"] == 800
     nak = next(c for c in out["categories"] if c["name"] == "Nákupy")
     assert nak["monthlyMedianCzk"] == 400
+
+
+def test_tier2_discount_line_subtracts():
+    # objednávka 1000: produkt 1100 (Elektronika) + sleva -100 (Nákupy, kladná částka = kredit)
+    tx = [{"id": "o1", "date": "2026-01-10T00:00:00", "amountCzk": -1000, "category": "Nákupy", "counterparty": "ALZA"}]
+    cats = CATS + [
+        {"name": "Nákupy", "type": "Expense", "excludeFromCashflow": False, "isPrivate": False, "scope": "Domácnost"},
+        {"name": "Elektronika", "type": "Expense", "excludeFromCashflow": False, "isPrivate": False, "scope": "Domácnost"},
+    ]
+    items = {"o1": [
+        {"category": "Elektronika", "subcategory": None, "amountCzk": -1100},
+        {"category": "Nákupy", "subcategory": None, "amountCzk": 100},
+    ]}
+    out = _run(tx, cats, items)
+    el = next(c for c in out["categories"] if c["name"] == "Elektronika")
+    assert el["monthlyMedianCzk"] == 1100
+    nak = next(c for c in out["categories"] if c["name"] == "Nákupy")
+    assert nak["monthlyMedianCzk"] == -100   # sleva odečte (znaménkově)

@@ -60,7 +60,7 @@ def main(bt_path, cat_path, items_path, as_of):
         line_items = items.get(t["id"])
         if line_items:
             for li in line_items:
-                amt = abs(li["amountCzk"])
+                amt = -li["amountCzk"]   # znaménkově: výdaj (záporný) → kladný, sleva (kladná) → odečte
                 lc = li["category"]
                 cat_m[lc][ym] += amt
                 if li.get("subcategory"):

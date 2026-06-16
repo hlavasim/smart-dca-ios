@@ -20,6 +20,7 @@ final class CashflowCockpitViewModel: ObservableObject {
     @Published var fioLoading = false
     @Published var fioError: String?
     @Published var fioBalance: Decimal?          // nil = ještě nerefreshováno
+    @Published var fioFetchedAt: Date?           // kdy naposledy refreshnuto (z cache i živě)
     @Published var fioSpentCycle: Decimal = 0
     @Published var manualSpends: [ManualSpend] = []
     @Published var fioTransactions: [FioTransaction] = []
@@ -53,6 +54,7 @@ final class CashflowCockpitViewModel: ObservableObject {
     private let fioCategoryStore: FioCategoryStore
     private let defaults = UserDefaults.standard
     private let paycheckKey = "nextPaycheckCzk.v1"
+    private let fioCacheKey = "fioSnapshot.v1"
     private let cal: Calendar
 
     init(deps: AppDependencies) {
@@ -168,6 +170,8 @@ final class CashflowCockpitViewModel: ObservableObject {
         let merged = currentCockpitState()
         let hasData = merged.nextPaycheckCzk > 0 || !merged.manualSpends.isEmpty
         if hasData && (remoteState == nil || remoteState! != merged) { pushCockpitState() }
+        // Poslední Fio stav z cache → výhled je vidět hned po otevření (refresh ho jen aktualizuje)
+        restoreFioCache()
         errorMessage = nil
         loaded = true
         recompute()
@@ -182,7 +186,9 @@ final class CashflowCockpitViewModel: ObservableObject {
         case .success(let s):
             fioBalance = s.balanceCzk
             fioTransactions = s.transactions
+            fioFetchedAt = Date()
             fioError = nil
+            saveFioCache()
             recompute()
         case .failure(let err):
             fioError = {
@@ -270,6 +276,29 @@ final class CashflowCockpitViewModel: ObservableObject {
 
     private func dbl(_ d: Decimal) -> Double { NSDecimalNumber(decimal: d).doubleValue }
 
+    // MARK: - Fio cache (poslední stav přežije zavření appky)
+
+    private struct FioCache: Codable {
+        var balanceCzk: Decimal
+        var transactions: [FioTransaction]
+        var fetchedAt: Date
+    }
+
+    private func saveFioCache() {
+        guard let bal = fioBalance else { return }
+        let cache = FioCache(balanceCzk: bal, transactions: fioTransactions, fetchedAt: fioFetchedAt ?? Date())
+        if let data = try? JSONEncoder().encode(cache) { defaults.set(data, forKey: fioCacheKey) }
+    }
+
+    private func restoreFioCache() {
+        guard fioBalance == nil,
+              let data = defaults.data(forKey: fioCacheKey),
+              let cache = try? JSONDecoder().decode(FioCache.self, from: data) else { return }
+        fioBalance = cache.balanceCzk
+        fioTransactions = cache.transactions
+        fioFetchedAt = cache.fetchedAt
+    }
+
     var maxCategoryCzk: Int { categories.map(\.monthlyMedianCzk).max() ?? 1 }
     var internalTransferTotalCzk: Int { internalTransfers.reduce(0) { $0 + $1.amountCzk } }
 
@@ -294,4 +323,11 @@ final class CashflowCockpitViewModel: ObservableObject {
     }
     /// Přebytek na výplatu = „ušetříš navíc" (nad už odloženými investicemi). Nil dokud není Fio.
     var willHaveSurplus: Bool { (projectedAtPayday ?? 0) >= 0 }
+
+    /// Kolik budeš mít hned po příští výplatě = projekce na výplatu + čistý zbytek výplaty.
+    /// Nil dokud nemáš Fio zůstatek nebo zadanou výplatu.
+    var afterPaycheckCzk: Decimal? {
+        guard let proj = projectedAtPayday, nextPaycheckCzk > 0 else { return nil }
+        return proj + Decimal(paycheckRestCzk)
+    }
 }

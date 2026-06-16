@@ -1,7 +1,7 @@
 import Foundation
 
 /// Jedna Fio transakce (pro kategorizaci v kokpitu).
-struct FioTransaction: Equatable, Identifiable {
+struct FioTransaction: Equatable, Identifiable, Codable {
     var id: String          // ID pohybu z Fio (stabilní)
     var date: Date
     var amountCzk: Decimal   // záporné = výdaj

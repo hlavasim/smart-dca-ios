@@ -82,6 +82,10 @@ struct CashflowCockpitView: View {
                     row(icon: "wallet.pass", color: colors.primary,
                         text: String(localized: "Bezpečně utrať ~\(fmtD(safe))/den (zbývá \(vm.daysUntilPayday) dní)."))
                 }
+                if let after = vm.afterPaycheckCzk {
+                    row(icon: "arrow.up.right.circle.fill", color: colors.success,
+                        text: String(localized: "Po výplatě budeš mít ≈ \(fmtD(after)) (zůstatek + čistá výplata \(fmt(vm.paycheckRestCzk)))."))
+                }
             } else {
                 Text(String(localized: "Pro výhled klepni na Refresh z Fio níž — vezme tvůj živý zůstatek a tempo."))
                     .font(AccBotFonts.body).foregroundStyle(colors.onSurfaceVariant)
@@ -119,6 +123,10 @@ struct CashflowCockpitView: View {
                     miniStat(String(localized: "Zůstatek"), fmtD(bal), colors.primary)
                     Spacer()
                     miniStat(String(localized: "Utraceno tento cyklus"), fmtD(vm.spentThisCycle), colors.onSurface, trailing: true)
+                }
+                if let at = vm.fioFetchedAt {
+                    Text(String(localized: "naposledy \(dmt(at))"))
+                        .font(AccBotFonts.captionSmall).foregroundStyle(colors.onSurfaceVariant)
                 }
             } else if let e = vm.fioError {
                 Text(e).font(AccBotFonts.caption).foregroundStyle(colors.error)
@@ -508,6 +516,11 @@ struct CashflowCockpitView: View {
         let f = DateFormatter(); f.dateFormat = "d. M."; f.locale = Locale(identifier: "cs_CZ"); return f
     }()
     private func dm(_ d: Date) -> String { Self.dmFmt.string(from: d) }
+
+    private static let dmtFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "d. M. HH:mm"; f.locale = Locale(identifier: "cs_CZ"); return f
+    }()
+    private func dmt(_ d: Date) -> String { Self.dmtFmt.string(from: d) }
 }
 
 /// Karta — sjednocené pozadí + rádius.

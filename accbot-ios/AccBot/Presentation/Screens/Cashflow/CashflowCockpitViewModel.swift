@@ -351,4 +351,58 @@ final class CashflowCockpitViewModel: ObservableObject {
         guard let proj = projectedAtPayday, nextPaycheckCzk > 0 else { return nil }
         return proj + Decimal(paycheckRestCzk)
     }
+
+    // MARK: - Realistická projekce zůstatku (schodovitá dle frekvence kategorií + skok výplaty)
+
+    struct RunwayPoint: Identifiable {
+        let id: Int
+        let day: Int
+        let value: Double
+    }
+
+    /// Fixní/standing-order kategorie (platí se z Air Banku, ne z Fia) — netvarují Fio křivku.
+    private let fixedCats: Set<String> = ["Splátka půjčky", "Daně", "Zdravotní pojištění",
+        "Pojištění", "Nemovitost", "Bydlení", "Úroky", "Bankovní poplatky"]
+
+    /// Den výplaty jako offset od dneška (pro svislou čáru v grafu).
+    var paydayDayOffset: Int { daysUntilPayday }
+
+    /// Křivka zůstatku do výplaty a kus za ni. Útraty jako události (frekvence × velikost
+    /// z baseline), zakotvené na projectedAtPayday (stejný cíl jako hero), + skok výplaty.
+    var runwayCurve: [RunwayPoint] {
+        guard let balDec = fioBalance, let proj = projectedAtPayday else { return [] }
+        let bal = dbl(balDec)
+        let until = daysUntilPayday
+        guard until > 0 else { return [] }
+        let cycleDays = max(1, days(lastPayday, nextPayday))
+        let horizon = until + 10
+
+        // 1) syrový rozvrh útrat (tvar) — jen variabilní kategorie
+        var raw = [Double](repeating: 0, count: horizon + 1)
+        for c in categories where c.monthlyMedianCzk > 0 && !fixedCats.contains(c.name) {
+            let f = max(1.0, c.avgTxPerMonth ?? 1.0)
+            let perEvent = Double(c.monthlyMedianCzk) / f
+            let interval = max(0.6, Double(cycleDays) / f)
+            var d = interval * 0.5
+            while d <= Double(horizon) {
+                raw[min(horizon, Int(d.rounded()))] += perEvent
+                d += interval
+            }
+        }
+
+        // 2) škáluj tak, aby útrata [0..until] = bal − projectedAtPayday (konzistence s hero)
+        let rawToPayday = raw[0...until].reduce(0, +)
+        let targetSpend = max(0, bal - dbl(proj))
+        let scale = rawToPayday > 0 ? targetSpend / rawToPayday : 0
+
+        // 3) poskládej křivku (skok výplaty v den `until`)
+        var pts: [RunwayPoint] = []
+        var running = bal
+        for day in 0...horizon {
+            if day > 0 { running -= raw[day] * scale }
+            if day == until { running += Double(paycheckRestCzk) }
+            pts.append(RunwayPoint(id: day, day: day, value: running))
+        }
+        return pts
+    }
 }

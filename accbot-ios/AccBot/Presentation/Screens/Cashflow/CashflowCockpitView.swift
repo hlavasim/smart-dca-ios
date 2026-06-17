@@ -224,9 +224,10 @@ struct CashflowCockpitView: View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Text(String(localized: "Jak peníze padají do výplaty")).font(AccBotFonts.titleSmall)
                 .foregroundStyle(colors.onSurface)
-            if let bal = vm.fioBalance, let proj = vm.projectedAtPayday, vm.daysUntilPayday > 0 {
+            let curve = vm.runwayCurve
+            if !curve.isEmpty {
                 Chart {
-                    ForEach(chartPoints(bal: bal, proj: proj, days: vm.daysUntilPayday), id: \.day) { p in
+                    ForEach(curve) { p in
                         LineMark(x: .value("Den", p.day), y: .value("Kč", p.value))
                             .foregroundStyle(colors.primary)
                         AreaMark(x: .value("Den", p.day), y: .value("Kč", p.value))
@@ -235,20 +236,23 @@ struct CashflowCockpitView: View {
                     RuleMark(y: .value("Nula", 0))
                         .foregroundStyle(colors.error.opacity(0.5))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
+                    RuleMark(x: .value("Výplata", vm.paydayDayOffset))
+                        .foregroundStyle(colors.success.opacity(0.6))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3]))
+                        .annotation(position: .top, alignment: .center) {
+                            Text(String(localized: "výplata"))
+                                .font(AccBotFonts.captionSmall).foregroundStyle(colors.success)
+                        }
                 }
-                .frame(height: 140)
+                .frame(height: 150)
+                Text(String(localized: "Schodovitě dle frekvence útrat v kategoriích; svislá čára = výplata (skok nahoru)."))
+                    .font(AccBotFonts.captionSmall).foregroundStyle(colors.onSurfaceVariant)
             } else {
                 Text(String(localized: "Po Refreshi z Fio se ukáže křivka zůstatku do výplaty."))
                     .font(AccBotFonts.caption).foregroundStyle(colors.onSurfaceVariant)
             }
         }
         .modifier(Card(colors: colors))
-    }
-
-    private func chartPoints(bal: Decimal, proj: Decimal, days: Int) -> [(day: Int, value: Double)] {
-        let b = NSDecimalNumber(decimal: bal).doubleValue
-        let p = NSDecimalNumber(decimal: proj).doubleValue
-        return (0...max(1, days)).map { d in (d, b + (p - b) * Double(d) / Double(max(1, days))) }
     }
 
     // MARK: - Per-kategorie live

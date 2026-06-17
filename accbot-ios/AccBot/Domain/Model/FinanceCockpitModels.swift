@@ -19,6 +19,8 @@ struct FinanceBaseline: Codable, Equatable {
     struct Cat: Codable, Equatable, Identifiable {
         var name: String
         var monthlyMedianCzk: Int
+        /// Průměrný počet transakcí za měsíc (frekvence) — pro realistickou projekci grafu.
+        var avgTxPerMonth: Double?
         var merchants: [Sub]?
         var subcategories: [Sub]?
         var id: String { name }

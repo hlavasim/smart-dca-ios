@@ -49,6 +49,7 @@ def main(bt_path, cat_path, items_path, as_of):
     cat_m = defaultdict(lambda: defaultdict(float))            # cat -> month -> sum
     merch_m = defaultdict(lambda: defaultdict(float))          # (cat, merchant) -> month -> sum
     sub_m = defaultdict(lambda: defaultdict(float))            # (cat, sub) -> month -> sum (napříč merchanty)
+    cnt_m = defaultdict(lambda: defaultdict(int))             # cat -> month -> počet transakcí (pro frekvenci)
     months = set()
 
     for t in txs:
@@ -56,6 +57,7 @@ def main(bt_path, cat_path, items_path, as_of):
             continue
         ym = t["date"][:7]
         months.add(ym)
+        cnt_m[t["category"]][ym] += 1   # počet transakcí (top-level kategorie, 1× za tx) — frekvence útrat
         merchant = canonical_merchant(t.get("counterparty"), patterns)
         line_items = items.get(t["id"])
         if line_items:
@@ -75,6 +77,11 @@ def main(bt_path, cat_path, items_path, as_of):
     def med(month_map):
         return _median0(list(month_map.values()))
 
+    def avg_count(name):
+        # Průměrný počet transakcí za měsíc (pro frekvenci útrat v projekci grafu).
+        counts = list(cnt_m.get(name, {}).values())
+        return round(sum(counts) / len(counts), 1) if counts else 0.0
+
     categories_out = []
     all_names = set(cat_m) | {k[0] for k in merch_m} | {k[0] for k in sub_m}
     for name in sorted(all_names):
@@ -86,7 +93,8 @@ def main(bt_path, cat_path, items_path, as_of):
             {"name": s, "monthlyMedianCzk": med(sm)}
             for (cc, s), sm in sub_m.items() if cc == name
         ]
-        entry = {"name": name, "monthlyMedianCzk": med(cat_m.get(name, {}))}
+        entry = {"name": name, "monthlyMedianCzk": med(cat_m.get(name, {})),
+                 "avgTxPerMonth": avg_count(name)}
         if merchants:
             entry["merchants"] = sorted(merchants, key=lambda x: -x["monthlyMedianCzk"])
         if subs:
